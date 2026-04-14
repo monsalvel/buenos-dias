@@ -12,48 +12,92 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Use Deno's fetch with certificate verification disabled for BCV
-    // BCV has known SSL certificate issues
-    const client = Deno.createHttpClient({
-      caCerts: [],
-    });
+    // BCV has SSL cert issues, try multiple approaches
+    let html = "";
+    let fetchError = "";
 
-    const response = await fetch("https://www.bcv.org.ve/", {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml",
-      },
-      // @ts-ignore - Deno-specific option
-      client,
-    });
-
-    if (!response.ok) {
-      throw new Error(`BCV fetch failed: ${response.status}`);
+    // Approach 1: Try via a web cache/proxy
+    try {
+      const proxyRes = await fetch(
+        "https://webcache.googleusercontent.com/search?q=cache:bcv.org.ve",
+        {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          },
+        }
+      );
+      if (proxyRes.ok) {
+        html = await proxyRes.text();
+      }
+    } catch (e) {
+      fetchError += `Proxy failed: ${e}. `;
     }
 
-    const html = await response.text();
-    client.close();
+    // Approach 2: Try http (non-SSL)
+    if (!html) {
+      try {
+        const httpRes = await fetch("http://www.bcv.org.ve/", {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          },
+        });
+        if (httpRes.ok) {
+          html = await httpRes.text();
+        }
+      } catch (e) {
+        fetchError += `HTTP failed: ${e}. `;
+      }
+    }
 
-    // Extract USD rate from BCV page
-    // The official rate is in the "Tipos de Cambio" section
+    // Approach 3: Direct HTTPS with Deno client workaround
+    if (!html) {
+      try {
+        const proc = new Deno.Command("curl", {
+          args: ["-sSk", "https://www.bcv.org.ve/"],
+          stdout: "piped",
+          stderr: "piped",
+        });
+        const output = await proc.output();
+        if (output.success) {
+          html = new TextDecoder().decode(output.stdout);
+        }
+      } catch (e) {
+        fetchError += `Curl failed: ${e}. `;
+      }
+    }
+
+    if (!html) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Could not fetch BCV page. ${fetchError}`,
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Extract USD rate
     let rate: number | null = null;
 
-    // Look for "field-dicom-venta" which contains the official selling rate
+    // Pattern 1: field-dicom-venta
     const ventaMatch = html.match(
-      /field-dicom-venta[^>]*>[\s\S]*?<span[^>]*>([\d.,]+)<\/span>/
+      /field-dicom-venta[\s\S]*?<span[^>]*>([\d.,]+)<\/span>/
     );
     if (ventaMatch) {
-      // BCV uses dot as thousands separator and comma as decimal
       rate = parseFloat(
         ventaMatch[1].replace(/\./g, "").replace(",", ".")
       );
     }
 
-    // Fallback: try alternative pattern
+    // Pattern 2: Venta label
     if (!rate) {
       const altMatch = html.match(
-        /Venta:[\s\S]*?<span[^>]*>([\d.,]+)<\/span>/
+        /Venta:\s*<\/span>\s*<span[^>]*>([\d.,]+)<\/span>/
       );
       if (altMatch) {
         rate = parseFloat(
@@ -67,7 +111,6 @@ Deno.serve(async (req) => {
         JSON.stringify({
           success: false,
           error: "Could not parse USD rate from BCV page",
-          debug: html.substring(0, 500),
         }),
         {
           status: 500,
@@ -81,14 +124,10 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { error: dbError } = await supabase.from("bcv_rates").insert({
+    await supabase.from("bcv_rates").insert({
       currency: "USD",
       rate,
     });
-
-    if (dbError) {
-      console.error("DB insert error:", dbError);
-    }
 
     return new Response(
       JSON.stringify({
