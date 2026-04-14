@@ -1,19 +1,22 @@
 import { useStore } from '@/store/useStore';
-import { DollarSign, TrendingUp, CreditCard, ShoppingCart, RefreshCw } from 'lucide-react';
+import { DollarSign, TrendingUp, CreditCard, ShoppingCart, RefreshCw, ChevronRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { useState } from 'react';
+import EarningsDetail from '@/components/EarningsDetail';
 
-const StatCard = ({ icon: Icon, label, value, color }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string; color: string }) => (
-  <Card className="animate-fade-in">
+const StatCard = ({ icon: Icon, label, value, color, onClick }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string; color: string; onClick?: () => void }) => (
+  <Card className={`animate-fade-in ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow active:scale-[0.98] transition-transform' : ''}`} onClick={onClick}>
     <CardContent className="p-4 flex items-center gap-3">
       <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${color}`}>
         <Icon className="w-5 h-5" />
       </div>
-      <div>
+      <div className="flex-1">
         <p className="text-xs text-muted-foreground font-medium">{label}</p>
         <p className="text-lg font-bold font-display">{value}</p>
       </div>
+      {onClick && <ChevronRight className="w-4 h-4 text-muted-foreground/50" />}
     </CardContent>
   </Card>
 );
@@ -45,6 +48,7 @@ const Dashboard = () => {
   const frequentCustomers = getFrequentCustomers();
   const recentSales = [...sales].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
   const [refreshing, setRefreshing] = useState(false);
+  const [showEarnings, setShowEarnings] = useState(false);
 
   const handleRefreshRate = async () => {
     setRefreshing(true);
@@ -55,7 +59,7 @@ const Dashboard = () => {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-display font-bold">Buenos días ☀️</h1>
-        <p className="text-muted-foreground text-sm">Resumen de tu panadería</p>
+        <p className="text-muted-foreground text-sm">Resumen de tus ventas</p>
       </div>
 
       {/* BCV Rate */}
@@ -64,7 +68,7 @@ const Dashboard = () => {
           <div>
             <p className="text-xs text-muted-foreground">Tasa BCV (USD)</p>
             <p className="text-lg font-bold font-display">
-              {bcvRate ? `Bs. ${bcvRate.rate.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : 'No disponible'}
+              {bcvRate ? `Bs. ${bcvRate.rate.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'No disponible'}
             </p>
             {bcvRate && <p className="text-[10px] text-muted-foreground">Actualizado: {new Date(bcvRate.fetchedAt).toLocaleString()}</p>}
           </div>
@@ -76,10 +80,21 @@ const Dashboard = () => {
 
       <div className="grid grid-cols-2 gap-3">
         <StatCard icon={DollarSign} label="Ingresos hoy" value={`$${stats.income.toFixed(2)}`} color="bg-primary/15 text-primary" />
-        <StatCard icon={TrendingUp} label="Ganancia neta" value={`$${stats.profit.toFixed(2)}`} color="bg-success/15 text-success" />
+        <StatCard icon={TrendingUp} label="Ganancia neta" value={`$${stats.profit.toFixed(2)}`} color="bg-success/15 text-success" onClick={() => setShowEarnings(true)} />
         <StatCard icon={CreditCard} label="Por cobrar" value={`$${stats.receivables.toFixed(2)}`} color="bg-warning/15 text-warning" />
         <StatCard icon={ShoppingCart} label="Ventas hoy" value={`${stats.salesCount}`} color="bg-accent/15 text-accent-foreground" />
       </div>
+
+      {/* Earnings Detail Sheet */}
+      <Sheet open={showEarnings} onOpenChange={setShowEarnings}>
+        <SheetContent side="bottom" className="h-[90vh] rounded-t-2xl">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="font-display text-lg">📊 Análisis de Ganancias</SheetTitle>
+            <SheetDescription>Desglose detallado de ingresos, costos y ganancias por producto</SheetDescription>
+          </SheetHeader>
+          <EarningsDetail />
+        </SheetContent>
+      </Sheet>
 
       <Card>
         <CardContent className="p-4">

@@ -30,7 +30,7 @@ const CustomerForm = ({ customer, onSave, onClose }: { customer?: Customer; onSa
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div><Label>Nombre</Label><Input value={firstName} onChange={(e) => setFirstName(e.target.value)} required /></div>
-        <div><Label>Apellido</Label><Input value={lastName} onChange={(e) => setLastName(e.target.value)} required /></div>
+        <div><Label>Apellido (opcional)</Label><Input value={lastName} onChange={(e) => setLastName(e.target.value)} /></div>
       </div>
       <div><Label>Teléfono</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="+584121234567" /></div>
       <div><Label>Dirección (opcional)</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle, casa, referencia" /></div>
@@ -46,7 +46,7 @@ const CustomersPage = () => {
   const [search, setSearch] = useState('');
 
   const filtered = customers.filter((c) =>
-    `${c.firstName} ${c.lastName}`.toLowerCase().includes(search.toLowerCase())
+    `${c.firstName} ${c.lastName || ''}`.toLowerCase().includes(search.toLowerCase())
   );
 
   const getCustomerDebt = (customerId: string) => {
@@ -95,7 +95,7 @@ const CustomersPage = () => {
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center text-primary font-bold">
-                      {c.firstName[0]}{c.lastName[0]}
+                      {c.firstName[0]}{c.lastName ? c.lastName[0] : ''}
                     </div>
                     <div>
                       <div className="flex items-center gap-1">

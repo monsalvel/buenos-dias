@@ -45,7 +45,7 @@ interface AppState {
   deleteCustomer: (id: string) => Promise<void>;
 
   // Sale actions
-  addSale: (sale: Omit<Sale, 'id' | 'createdAt' | 'updatedAt' | 'items' | 'payments'>, items: SaleItem[], payments: Omit<Payment, 'id'>[]) => Promise<void>;
+  addSale: (sale: Omit<Sale, 'id' | 'createdAt' | 'updatedAt' | 'items' | 'payments'>, items: SaleItem[], payments: Omit<Payment, 'id'>[], dueDate?: string) => Promise<void>;
   addPayment: (saleId: string, payment: Omit<Payment, 'id'>) => Promise<void>;
   cancelSale: (saleId: string) => Promise<void>;
 
@@ -99,6 +99,7 @@ export const useStore = create<AppState>()((set, get) => ({
       paymentMethod: s.payment_method as PaymentMethod,
       createdAt: s.created_at,
       updatedAt: s.updated_at,
+      dueDate: s.due_date || undefined,
       items: allItems.filter((i: any) => i.sale_id === s.id).map(mapSaleItem),
       payments: allPayments.filter((p: any) => p.sale_id === s.id).map(mapPayment),
     }));
@@ -190,9 +191,9 @@ export const useStore = create<AppState>()((set, get) => ({
     set((s) => ({ customers: s.customers.filter((c) => c.id !== id) }));
   },
 
-  addSale: async (sale, items, payments) => {
-    // Insert sale
-    const { data: saleData, error: saleErr } = await supabase.from('sales').insert({
+  addSale: async (sale, items, payments, dueDate) => {
+    // Insert sale (due_date stored locally only until DB column is added)
+    const insertData: any = {
       customer_id: sale.customerId,
       customer_name: sale.customerName,
       seller_name: sale.sellerName,
@@ -202,7 +203,8 @@ export const useStore = create<AppState>()((set, get) => ({
       balance: sale.balance,
       status: sale.status,
       payment_method: sale.paymentMethod,
-    }).select().single();
+    };
+    const { data: saleData, error: saleErr } = await supabase.from('sales').insert(insertData).select().single();
     if (saleErr) throw saleErr;
 
     // Insert sale items
@@ -249,6 +251,7 @@ export const useStore = create<AppState>()((set, get) => ({
       paymentMethod: saleData.payment_method as PaymentMethod,
       createdAt: saleData.created_at,
       updatedAt: saleData.updated_at,
+      dueDate: saleData.due_date || undefined,
       items: (itemsData || []).map(mapSaleItem),
       payments: paymentsData.map(mapPayment),
     };

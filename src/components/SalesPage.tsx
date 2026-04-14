@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { useStore } from '@/store/useStore';
 import { SaleItem, PaymentMethod, SaleStatus, Sale } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -7,7 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Minus, DollarSign, Eye } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Plus, Minus, DollarSign, Eye, CalendarClock, Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const paymentLabels: Record<PaymentMethod, string> = {
   efectivo: '💵 Efectivo',
@@ -30,7 +34,13 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
   const [items, setItems] = useState<SaleItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('efectivo');
   const [paidAmount, setPaidAmount] = useState('');
+  const [dueDate, setDueDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [openCustomerList, setOpenCustomerList] = useState(false);
+
+  const sortedCustomers = [...customers].sort((a, b) => 
+    `${a.firstName} ${a.lastName || ''}`.trim().localeCompare(`${b.firstName} ${b.lastName || ''}`.trim())
+  );
 
   const total = items.reduce((s, i) => s + i.subtotal, 0);
   const totalCost = items.reduce((s, i) => s + i.unitCost * i.quantity, 0);
@@ -85,10 +95,12 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
         balance: Math.max(0, balance),
         status,
         paymentMethod,
-      }, items, payments);
+      }, items, payments, dueDate || undefined);
+      toast.success('Venta registrada exitosamente');
       onClose();
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error creating sale:', e);
+      toast.error('Error al registrar venta', { description: e?.message || 'Intenta de nuevo' });
     } finally {
       setSubmitting(false);
     }
@@ -101,16 +113,54 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
         <Input value={sellerName} onChange={(e) => setSellerName(e.target.value)} placeholder="Nombre del vendedor" required />
       </div>
 
-      <div>
+      <div className="flex flex-col gap-1">
         <Label>Cliente</Label>
-        <Select value={customerId} onValueChange={setCustomerId}>
-          <SelectTrigger><SelectValue placeholder="Seleccionar cliente" /></SelectTrigger>
-          <SelectContent>
-            {customers.map((c) => (
-              <SelectItem key={c.id} value={c.id}>{c.firstName} {c.lastName}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Popover open={openCustomerList} onOpenChange={setOpenCustomerList}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={openCustomerList}
+              className="w-full justify-between"
+            >
+              {customerId
+                ? (() => {
+                    const c = customers.find((c) => c.id === customerId);
+                    return c ? `${c.firstName} ${c.lastName || ''}` : "Seleccionar cliente";
+                  })()
+                : "Seleccionar cliente..."}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-full p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Buscar cliente..." />
+              <CommandList>
+                <CommandEmpty>No se encontró ningún cliente.</CommandEmpty>
+                <CommandGroup>
+                  {sortedCustomers.map((c) => (
+                    <CommandItem
+                      key={c.id}
+                      value={`${c.firstName} ${c.lastName || ''}`}
+                      onSelect={() => {
+                        setCustomerId(c.id);
+                        setOpenCustomerList(false);
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          customerId === c.id ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      {c.firstName} {c.lastName}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div>
@@ -158,10 +208,17 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
       </div>
 
       {paymentMethod === 'credito' && (
-        <div>
-          <Label>Monto de abono inicial ($)</Label>
-          <Input type="number" step="0.01" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} placeholder="0.00" />
-        </div>
+        <>
+          <div>
+            <Label>Monto de abono inicial ($)</Label>
+            <Input type="number" step="0.01" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} placeholder="0.00" />
+          </div>
+          <div>
+            <Label className="flex items-center gap-1.5"><CalendarClock className="w-3.5 h-3.5" />Fecha límite de pago</Label>
+            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} min={new Date().toISOString().split('T')[0]} />
+            <p className="text-[10px] text-muted-foreground mt-1">Se te recordará cuando llegue esta fecha</p>
+          </div>
+        </>
       )}
 
       <Button className="w-full" onClick={handleSubmit} disabled={!customerId || items.length === 0 || !sellerName.trim() || submitting}>
@@ -273,6 +330,19 @@ const SalesPage = () => {
                 <span>Saldo pendiente</span>
                 <span className={viewSale.balance > 0 ? 'text-destructive' : 'text-success'}>${viewSale.balance.toFixed(2)}</span>
               </div>
+              {viewSale.dueDate && (
+                <div className={`flex items-center gap-2 text-sm p-2 rounded-lg mt-1 ${
+                  new Date(viewSale.dueDate) < new Date() && viewSale.balance > 0
+                    ? 'bg-destructive/10 text-destructive'
+                    : 'bg-warning/10 text-warning'
+                }`}>
+                  <CalendarClock className="w-4 h-4" />
+                  <span>Fecha límite: <span className="font-bold">{new Date(viewSale.dueDate + 'T00:00:00').toLocaleDateString('es-VE')}</span></span>
+                  {new Date(viewSale.dueDate) < new Date() && viewSale.balance > 0 && (
+                    <span className="text-[10px] font-bold uppercase ml-auto">Vencido</span>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

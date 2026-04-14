@@ -59,6 +59,7 @@ export interface Sale {
   paymentMethod: PaymentMethod;
   createdAt: string;
   updatedAt: string;
+  dueDate?: string;
 }
 
 export interface BcvRate {
