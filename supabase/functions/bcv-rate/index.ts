@@ -12,97 +12,54 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // BCV has SSL cert issues, try multiple approaches
-    let html = "";
-    let fetchError = "";
+    let rate: number | null = null;
+    let source = "";
 
-    // Approach 1: Try via a web cache/proxy
+    // Approach 1: Banco de Venezuela JSON API (most reliable, no SSL issues)
     try {
-      const proxyRes = await fetch(
-        "https://webcache.googleusercontent.com/search?q=cache:bcv.org.ve",
+      const bdvRes = await fetch(
+        "https://www.bancodevenezuela.com/files/tasas/tasas2.json",
         {
           headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "User-Agent": "Mozilla/5.0",
+            Accept: "application/json",
           },
         }
       );
-      if (proxyRes.ok) {
-        html = await proxyRes.text();
+      if (bdvRes.ok) {
+        const bdvData = await bdvRes.json();
+        // Path: menudeo.compra.dolares
+        const rawRate = bdvData?.menudeo?.compra?.dolares;
+        if (rawRate) {
+          rate = parseFloat(
+            String(rawRate).replace(/\./g, "").replace(",", ".")
+          );
+          source = "BDV";
+        }
       }
     } catch (e) {
-      fetchError += `Proxy failed: ${e}. `;
+      console.error("BDV fetch failed:", e);
     }
 
-    // Approach 2: Try http (non-SSL)
-    if (!html) {
-      try {
-        const httpRes = await fetch("http://www.bcv.org.ve/", {
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          },
-        });
-        if (httpRes.ok) {
-          html = await httpRes.text();
-        }
-      } catch (e) {
-        fetchError += `HTTP failed: ${e}. `;
-      }
-    }
-
-    // Approach 3: Direct HTTPS with Deno client workaround
-    if (!html) {
-      try {
-        const proc = new Deno.Command("curl", {
-          args: ["-sSk", "https://www.bcv.org.ve/"],
-          stdout: "piped",
-          stderr: "piped",
-        });
-        const output = await proc.output();
-        if (output.success) {
-          html = new TextDecoder().decode(output.stdout);
-        }
-      } catch (e) {
-        fetchError += `Curl failed: ${e}. `;
-      }
-    }
-
-    if (!html) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: `Could not fetch BCV page. ${fetchError}`,
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // Extract USD rate
-    let rate: number | null = null;
-
-    // Pattern 1: field-dicom-venta
-    const ventaMatch = html.match(
-      /field-dicom-venta[\s\S]*?<span[^>]*>([\d.,]+)<\/span>/
-    );
-    if (ventaMatch) {
-      rate = parseFloat(
-        ventaMatch[1].replace(/\./g, "").replace(",", ".")
-      );
-    }
-
-    // Pattern 2: Venta label
+    // Approach 2: Try pydolarve API (community API)
     if (!rate) {
-      const altMatch = html.match(
-        /Venta:\s*<\/span>\s*<span[^>]*>([\d.,]+)<\/span>/
-      );
-      if (altMatch) {
-        rate = parseFloat(
-          altMatch[1].replace(/\./g, "").replace(",", ".")
+      try {
+        const pyRes = await fetch(
+          "https://pydolarve.org/api/v2/dollar?page=bcv",
+          {
+            headers: { Accept: "application/json" },
+          }
         );
+        if (pyRes.ok) {
+          const pyData = await pyRes.json();
+          // Try to get BCV rate from the response
+          if (pyData?.monitors?.usd?.price) {
+            rate = pyData.monitors.usd.price;
+            source = "pydolarve";
+          }
+        }
+      } catch (e) {
+        console.error("pydolarve fetch failed:", e);
       }
     }
 
@@ -110,7 +67,8 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Could not parse USD rate from BCV page",
+          error:
+            "No se pudo obtener la tasa del BCV. Intente más tarde.",
         }),
         {
           status: 500,
@@ -134,6 +92,7 @@ Deno.serve(async (req) => {
         success: true,
         currency: "USD",
         rate,
+        source,
         fetched_at: new Date().toISOString(),
       }),
       {
