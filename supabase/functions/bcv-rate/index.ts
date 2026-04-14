@@ -12,12 +12,20 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Fetch BCV page
+    // Use Deno's fetch with certificate verification disabled for BCV
+    // BCV has known SSL certificate issues
+    const client = Deno.createHttpClient({
+      caCerts: [],
+    });
+
     const response = await fetch("https://www.bcv.org.ve/", {
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
       },
+      // @ts-ignore - Deno-specific option
+      client,
     });
 
     if (!response.ok) {
@@ -25,27 +33,27 @@ Deno.serve(async (req) => {
     }
 
     const html = await response.text();
+    client.close();
 
-    // Extract USD rate from "Tipo de Cambio de Referencia" section
-    // Look for the "Venta:" value in the tipo-cambio block
+    // Extract USD rate from BCV page
+    // The official rate is in the "Tipos de Cambio" section
     let rate: number | null = null;
 
-    // Try to find the official exchange rate
-    // Pattern: field-dicom-venta followed by the rate value
+    // Look for "field-dicom-venta" which contains the official selling rate
     const ventaMatch = html.match(
-      /field-dicom-venta[^>]*>.*?<span[^>]*>([0-9.,]+)<\/span>/s
+      /field-dicom-venta[^>]*>[\s\S]*?<span[^>]*>([\d.,]+)<\/span>/
     );
     if (ventaMatch) {
-      // BCV uses comma as decimal separator and dot as thousands
+      // BCV uses dot as thousands separator and comma as decimal
       rate = parseFloat(
         ventaMatch[1].replace(/\./g, "").replace(",", ".")
       );
     }
 
-    // Fallback: try to find any USD rate pattern
+    // Fallback: try alternative pattern
     if (!rate) {
       const altMatch = html.match(
-        /USD[\s\S]*?<strong>([\d.,]+)<\/strong>/i
+        /Venta:[\s\S]*?<span[^>]*>([\d.,]+)<\/span>/
       );
       if (altMatch) {
         rate = parseFloat(
@@ -58,7 +66,8 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Could not parse USD rate from BCV",
+          error: "Could not parse USD rate from BCV page",
+          debug: html.substring(0, 500),
         }),
         {
           status: 500,
