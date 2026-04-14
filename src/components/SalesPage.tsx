@@ -1,0 +1,285 @@
+import { useState } from 'react';
+import { useStore } from '@/store/useStore';
+import { SaleItem, PaymentMethod, SaleStatus, Sale } from '@/types';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Plus, Minus, DollarSign, Eye } from 'lucide-react';
+
+const paymentLabels: Record<PaymentMethod, string> = {
+  efectivo: '💵 Efectivo',
+  transferencia: '🏦 Transferencia',
+  pago_movil: '📱 Pago Móvil',
+  credito: '📋 Crédito',
+};
+
+const statusColors: Record<SaleStatus, string> = {
+  pagado: 'bg-success/10 text-success',
+  abonado: 'bg-warning/10 text-warning',
+  deuda: 'bg-destructive/10 text-destructive',
+  anulado: 'bg-muted text-muted-foreground',
+};
+
+const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
+  const { products, customers, addSale } = useStore();
+  const [customerId, setCustomerId] = useState('');
+  const [items, setItems] = useState<SaleItem[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('efectivo');
+  const [paidAmount, setPaidAmount] = useState('');
+
+  const total = items.reduce((s, i) => s + i.subtotal, 0);
+  const totalCost = items.reduce((s, i) => s + i.unitCost * i.quantity, 0);
+
+  const addItem = (productId: string) => {
+    const product = products.find((p) => p.id === productId);
+    if (!product) return;
+    const existing = items.find((i) => i.productId === productId);
+    if (existing) {
+      setItems(items.map((i) =>
+        i.productId === productId
+          ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.unitPrice }
+          : i
+      ));
+    } else {
+      setItems([...items, { productId, productName: product.name, quantity: 1, unitPrice: product.price, unitCost: product.cost, subtotal: product.price }]);
+    }
+  };
+
+  const updateQty = (productId: string, delta: number) => {
+    setItems(items.map((i) => {
+      if (i.productId !== productId) return i;
+      const newQty = Math.max(0, i.quantity + delta);
+      return { ...i, quantity: newQty, subtotal: newQty * i.unitPrice };
+    }).filter((i) => i.quantity > 0));
+  };
+
+  const handleSubmit = () => {
+    if (!customerId || items.length === 0) return;
+    const customer = customers.find((c) => c.id === customerId);
+    if (!customer) return;
+    const paid = paymentMethod === 'credito' ? parseFloat(paidAmount || '0') : total;
+    const balance = total - paid;
+    const status: SaleStatus = balance <= 0 ? 'pagado' : paid > 0 ? 'abonado' : 'deuda';
+
+    addSale({
+      customerId,
+      customerName: `${customer.firstName} ${customer.lastName}`,
+      items,
+      total,
+      totalCost,
+      payments: paid > 0 ? [{ id: crypto.randomUUID(), amount: paid, method: paymentMethod === 'credito' ? 'efectivo' : paymentMethod, date: new Date().toISOString() }] : [],
+      amountPaid: paid,
+      balance: Math.max(0, balance),
+      status,
+      paymentMethod,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+      <div>
+        <Label>Cliente</Label>
+        <Select value={customerId} onValueChange={setCustomerId}>
+          <SelectTrigger><SelectValue placeholder="Seleccionar cliente" /></SelectTrigger>
+          <SelectContent>
+            {customers.map((c) => (
+              <SelectItem key={c.id} value={c.id}>{c.firstName} {c.lastName}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label>Agregar productos</Label>
+        <div className="grid grid-cols-2 gap-2 mt-1">
+          {products.filter(p => p.active).map((p) => (
+            <Button key={p.id} variant="outline" size="sm" className="text-xs justify-start" onClick={() => addItem(p.id)}>
+              {p.category === 'pan' ? '🍞' : '🍩'} {p.name} - ${p.price.toFixed(2)}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {items.length > 0 && (
+        <Card>
+          <CardContent className="p-3 space-y-2">
+            {items.map((item) => (
+              <div key={item.productId} className="flex items-center justify-between">
+                <span className="text-sm font-medium">{item.productName}</span>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQty(item.productId, -1)}><Minus className="w-3 h-3" /></Button>
+                  <span className="text-sm font-bold w-6 text-center">{item.quantity}</span>
+                  <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQty(item.productId, 1)}><Plus className="w-3 h-3" /></Button>
+                  <span className="text-sm font-semibold w-16 text-right">${item.subtotal.toFixed(2)}</span>
+                </div>
+              </div>
+            ))}
+            <div className="border-t pt-2 flex justify-between font-bold">
+              <span>Total</span><span>${total.toFixed(2)}</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div>
+        <Label>Método de pago</Label>
+        <Select value={paymentMethod} onValueChange={(v: PaymentMethod) => setPaymentMethod(v)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Object.entries(paymentLabels).map(([k, v]) => (
+              <SelectItem key={k} value={k}>{v}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {paymentMethod === 'credito' && (
+        <div>
+          <Label>Monto de abono inicial ($)</Label>
+          <Input type="number" step="0.01" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} placeholder="0.00" />
+        </div>
+      )}
+
+      <Button className="w-full" onClick={handleSubmit} disabled={!customerId || items.length === 0}>
+        Registrar venta
+      </Button>
+    </div>
+  );
+};
+
+const PaymentDialog = ({ sale, onClose }: { sale: Sale; onClose: () => void }) => {
+  const { addPayment } = useStore();
+  const [amount, setAmount] = useState(sale.balance.toString());
+  const [method, setMethod] = useState<PaymentMethod>('efectivo');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    addPayment(sale.id, { amount: parseFloat(amount), method, date: new Date().toISOString() });
+    onClose();
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <p className="text-sm text-muted-foreground">Saldo pendiente: <span className="font-bold text-destructive">${sale.balance.toFixed(2)}</span></p>
+      <div><Label>Monto del abono</Label><Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required /></div>
+      <div><Label>Método</Label>
+        <Select value={method} onValueChange={(v: PaymentMethod) => setMethod(v)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="efectivo">💵 Efectivo</SelectItem>
+            <SelectItem value="transferencia">🏦 Transferencia</SelectItem>
+            <SelectItem value="pago_movil">📱 Pago Móvil</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <Button type="submit" className="w-full">Registrar abono</Button>
+    </form>
+  );
+};
+
+const SalesPage = () => {
+  const { sales, cancelSale } = useStore();
+  const [showNew, setShowNew] = useState(false);
+  const [payingSale, setPayingSale] = useState<Sale | null>(null);
+  const [viewSale, setViewSale] = useState<Sale | null>(null);
+
+  const sorted = [...sales].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-display font-bold">Ventas</h1>
+          <p className="text-muted-foreground text-sm">{sales.length} registradas</p>
+        </div>
+        <Button size="sm" onClick={() => setShowNew(true)}><Plus className="w-4 h-4 mr-1" />Nueva venta</Button>
+      </div>
+
+      <Dialog open={showNew} onOpenChange={setShowNew}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Nueva venta</DialogTitle></DialogHeader>
+          <NewSaleForm onClose={() => setShowNew(false)} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!payingSale} onOpenChange={() => setPayingSale(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Registrar abono</DialogTitle></DialogHeader>
+          {payingSale && <PaymentDialog sale={payingSale} onClose={() => setPayingSale(null)} />}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!viewSale} onOpenChange={() => setViewSale(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Detalle de venta</DialogTitle></DialogHeader>
+          {viewSale && (
+            <div className="space-y-3">
+              <p className="text-sm"><span className="text-muted-foreground">Cliente:</span> {viewSale.customerName}</p>
+              <p className="text-sm"><span className="text-muted-foreground">Fecha:</span> {new Date(viewSale.createdAt).toLocaleString()}</p>
+              <div className="border rounded-lg p-3 space-y-1">
+                {viewSale.items.map((item, i) => (
+                  <div key={i} className="flex justify-between text-sm">
+                    <span>{item.quantity}x {item.productName}</span>
+                    <span>${item.subtotal.toFixed(2)}</span>
+                  </div>
+                ))}
+                <div className="border-t pt-1 flex justify-between font-bold text-sm">
+                  <span>Total</span><span>${viewSale.total.toFixed(2)}</span>
+                </div>
+              </div>
+              {viewSale.payments.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold mb-1">Pagos:</p>
+                  {viewSale.payments.map((p, i) => (
+                    <div key={i} className="flex justify-between text-sm text-muted-foreground">
+                      <span>{paymentLabels[p.method]} - {new Date(p.date).toLocaleDateString()}</span>
+                      <span className="text-foreground">${p.amount.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex justify-between font-bold">
+                <span>Saldo pendiente</span>
+                <span className={viewSale.balance > 0 ? 'text-destructive' : 'text-success'}>${viewSale.balance.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <div className="space-y-2">
+        {sorted.map((sale) => (
+          <Card key={sale.id}>
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between mb-1">
+                <div>
+                  <p className="font-medium text-sm">{sale.customerName}</p>
+                  <p className="text-xs text-muted-foreground">{new Date(sale.createdAt).toLocaleDateString()} · {sale.items.length} items</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-sm">${sale.total.toFixed(2)}</p>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase ${statusColors[sale.status]}`}>{sale.status}</span>
+                </div>
+              </div>
+              <div className="flex gap-1 mt-2">
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setViewSale(sale)}><Eye className="w-3 h-3 mr-1" />Ver</Button>
+                {(sale.status === 'deuda' || sale.status === 'abonado') && (
+                  <Button variant="ghost" size="sm" className="h-7 text-xs text-success" onClick={() => setPayingSale(sale)}><DollarSign className="w-3 h-3 mr-1" />Abonar</Button>
+                )}
+                {sale.status !== 'anulado' && sale.status !== 'pagado' && (
+                  <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => cancelSale(sale.id)}>Anular</Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default SalesPage;
