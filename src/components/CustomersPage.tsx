@@ -13,11 +13,17 @@ const CustomerForm = ({ customer, onSave, onClose }: { customer?: Customer; onSa
   const [lastName, setLastName] = useState(customer?.lastName || '');
   const [phone, setPhone] = useState(customer?.phone || '');
   const [address, setAddress] = useState(customer?.address || '');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ firstName, lastName, phone, address });
-    onClose();
+    setSubmitting(true);
+    try {
+      await onSave({ firstName, lastName, phone, address });
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -28,7 +34,7 @@ const CustomerForm = ({ customer, onSave, onClose }: { customer?: Customer; onSa
       </div>
       <div><Label>Teléfono</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="+584121234567" /></div>
       <div><Label>Dirección (opcional)</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle, casa, referencia" /></div>
-      <Button type="submit" className="w-full">{customer ? 'Guardar' : 'Agregar cliente'}</Button>
+      <Button type="submit" className="w-full" disabled={submitting}>{submitting ? 'Guardando...' : (customer ? 'Guardar' : 'Agregar cliente')}</Button>
     </form>
   );
 };
@@ -54,9 +60,9 @@ const CustomersPage = () => {
     window.open(`https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=${msg}`, '_blank');
   };
 
-  const handleSave = (data: any) => {
-    if (editing) updateCustomer(editing.id, data);
-    else addCustomer(data);
+  const handleSave = async (data: any) => {
+    if (editing) await updateCustomer(editing.id, data);
+    else await addCustomer(data);
     setEditing(undefined);
   };
 
