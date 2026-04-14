@@ -22,6 +22,8 @@ export interface Customer {
 }
 
 export interface SaleItem {
+  id?: string;
+  saleId?: string;
   productId: string;
   productName: string;
   quantity: number;
@@ -35,6 +37,7 @@ export type SaleStatus = 'pagado' | 'abonado' | 'deuda' | 'anulado';
 
 export interface Payment {
   id: string;
+  saleId?: string;
   amount: number;
   method: PaymentMethod;
   date: string;
@@ -45,6 +48,7 @@ export interface Sale {
   id: string;
   customerId: string;
   customerName: string;
+  sellerName: string;
   items: SaleItem[];
   total: number;
   totalCost: number;
@@ -55,6 +59,13 @@ export interface Sale {
   paymentMethod: PaymentMethod;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BcvRate {
+  id: string;
+  currency: string;
+  rate: number;
+  fetchedAt: string;
 }
 
 export type TabId = 'dashboard' | 'sales' | 'customers' | 'products';
