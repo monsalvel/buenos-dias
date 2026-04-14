@@ -1,6 +1,8 @@
 import { useStore } from '@/store/useStore';
-import { DollarSign, TrendingUp, CreditCard, ShoppingCart } from 'lucide-react';
+import { DollarSign, TrendingUp, CreditCard, ShoppingCart, RefreshCw } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useState } from 'react';
 
 const StatCard = ({ icon: Icon, label, value, color }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string; color: string }) => (
   <Card className="animate-fade-in">
@@ -16,7 +18,7 @@ const StatCard = ({ icon: Icon, label, value, color }: { icon: React.ComponentTy
   </Card>
 );
 
-const RecentSaleRow = ({ name, total, status }: { name: string; total: number; status: string }) => {
+const RecentSaleRow = ({ name, total, status, sellerName }: { name: string; total: number; status: string; sellerName?: string }) => {
   const statusColors: Record<string, string> = {
     pagado: 'bg-success/10 text-success',
     abonado: 'bg-warning/10 text-warning',
@@ -27,7 +29,10 @@ const RecentSaleRow = ({ name, total, status }: { name: string; total: number; s
     <div className="flex items-center justify-between py-3 border-b border-border last:border-0">
       <div>
         <p className="font-medium text-sm">{name}</p>
-        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase ${statusColors[status] || ''}`}>{status}</span>
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase ${statusColors[status] || ''}`}>{status}</span>
+          {sellerName && <span className="text-[10px] text-muted-foreground">🧑‍💼 {sellerName}</span>}
+        </div>
       </div>
       <p className="font-bold text-sm">${total.toFixed(2)}</p>
     </div>
@@ -35,10 +40,16 @@ const RecentSaleRow = ({ name, total, status }: { name: string; total: number; s
 };
 
 const Dashboard = () => {
-  const { getTodayStats, sales, getFrequentCustomers } = useStore();
+  const { getTodayStats, sales, getFrequentCustomers, bcvRate, fetchBcvRate } = useStore();
   const stats = getTodayStats();
   const frequentCustomers = getFrequentCustomers();
   const recentSales = [...sales].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefreshRate = async () => {
+    setRefreshing(true);
+    try { await fetchBcvRate(); } finally { setRefreshing(false); }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -46,6 +57,22 @@ const Dashboard = () => {
         <h1 className="text-2xl font-display font-bold">Buenos días ☀️</h1>
         <p className="text-muted-foreground text-sm">Resumen de tu panadería</p>
       </div>
+
+      {/* BCV Rate */}
+      <Card>
+        <CardContent className="p-3 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground">Tasa BCV (USD)</p>
+            <p className="text-lg font-bold font-display">
+              {bcvRate ? `Bs. ${bcvRate.rate.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` : 'No disponible'}
+            </p>
+            {bcvRate && <p className="text-[10px] text-muted-foreground">Actualizado: {new Date(bcvRate.fetchedAt).toLocaleString()}</p>}
+          </div>
+          <Button variant="ghost" size="icon" onClick={handleRefreshRate} disabled={refreshing}>
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-2 gap-3">
         <StatCard icon={DollarSign} label="Ingresos hoy" value={`$${stats.income.toFixed(2)}`} color="bg-primary/15 text-primary" />
@@ -61,7 +88,7 @@ const Dashboard = () => {
             <p className="text-muted-foreground text-sm text-center py-4">No hay ventas aún</p>
           ) : (
             recentSales.map((sale) => (
-              <RecentSaleRow key={sale.id} name={sale.customerName} total={sale.total} status={sale.status} />
+              <RecentSaleRow key={sale.id} name={sale.customerName} total={sale.total} status={sale.status} sellerName={sale.sellerName} />
             ))
           )}
         </CardContent>

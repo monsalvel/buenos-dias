@@ -16,11 +16,17 @@ const ProductForm = ({ product, onSave, onClose }: { product?: Product; onSave: 
   const [category, setCategory] = useState(product?.category || 'pan');
   const [cost, setCost] = useState(product?.cost?.toString() || '');
   const [price, setPrice] = useState(product?.price?.toString() || '');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ name, category, cost: parseFloat(cost), price: parseFloat(price) });
-    onClose();
+    setSubmitting(true);
+    try {
+      await onSave({ name, category, cost: parseFloat(cost), price: parseFloat(price) });
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const margin = cost && price ? ((parseFloat(price) - parseFloat(cost)) / parseFloat(price) * 100).toFixed(0) : null;
@@ -43,7 +49,7 @@ const ProductForm = ({ product, onSave, onClose }: { product?: Product; onSave: 
         <div><Label>Precio ($)</Label><Input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} required /></div>
       </div>
       {margin && <p className="text-sm text-muted-foreground">Margen: <span className="font-bold text-success">{margin}%</span></p>}
-      <Button type="submit" className="w-full">{ product ? 'Guardar cambios' : 'Agregar producto'}</Button>
+      <Button type="submit" className="w-full" disabled={submitting}>{submitting ? 'Guardando...' : (product ? 'Guardar cambios' : 'Agregar producto')}</Button>
     </form>
   );
 };
@@ -53,9 +59,9 @@ const ProductsPage = () => {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Product | undefined>();
 
-  const handleSave = (data: any) => {
-    if (editing) updateProduct(editing.id, data);
-    else addProduct(data);
+  const handleSave = async (data: any) => {
+    if (editing) await updateProduct(editing.id, data);
+    else await addProduct(data);
     setEditing(undefined);
   };
 

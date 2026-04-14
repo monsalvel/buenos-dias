@@ -26,9 +26,11 @@ const statusColors: Record<SaleStatus, string> = {
 const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
   const { products, customers, addSale } = useStore();
   const [customerId, setCustomerId] = useState('');
+  const [sellerName, setSellerName] = useState('');
   const [items, setItems] = useState<SaleItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('efectivo');
   const [paidAmount, setPaidAmount] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const total = items.reduce((s, i) => s + i.subtotal, 0);
   const totalCost = items.reduce((s, i) => s + i.unitCost * i.quantity, 0);
@@ -56,31 +58,49 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
     }).filter((i) => i.quantity > 0));
   };
 
-  const handleSubmit = () => {
-    if (!customerId || items.length === 0) return;
+  const handleSubmit = async () => {
+    if (!customerId || items.length === 0 || !sellerName.trim()) return;
     const customer = customers.find((c) => c.id === customerId);
     if (!customer) return;
-    const paid = paymentMethod === 'credito' ? parseFloat(paidAmount || '0') : total;
-    const balance = total - paid;
-    const status: SaleStatus = balance <= 0 ? 'pagado' : paid > 0 ? 'abonado' : 'deuda';
 
-    addSale({
-      customerId,
-      customerName: `${customer.firstName} ${customer.lastName}`,
-      items,
-      total,
-      totalCost,
-      payments: paid > 0 ? [{ id: crypto.randomUUID(), amount: paid, method: paymentMethod === 'credito' ? 'efectivo' : paymentMethod, date: new Date().toISOString() }] : [],
-      amountPaid: paid,
-      balance: Math.max(0, balance),
-      status,
-      paymentMethod,
-    });
-    onClose();
+    setSubmitting(true);
+    try {
+      const paid = paymentMethod === 'credito' ? parseFloat(paidAmount || '0') : total;
+      const balance = total - paid;
+      const status: SaleStatus = balance <= 0 ? 'pagado' : paid > 0 ? 'abonado' : 'deuda';
+
+      const payments = paid > 0 ? [{
+        amount: paid,
+        method: (paymentMethod === 'credito' ? 'efectivo' : paymentMethod) as PaymentMethod,
+        date: new Date().toISOString(),
+      }] : [];
+
+      await addSale({
+        customerId,
+        customerName: `${customer.firstName} ${customer.lastName}`,
+        sellerName: sellerName.trim(),
+        total,
+        totalCost,
+        amountPaid: paid,
+        balance: Math.max(0, balance),
+        status,
+        paymentMethod,
+      }, items, payments);
+      onClose();
+    } catch (e) {
+      console.error('Error creating sale:', e);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+      <div>
+        <Label>Vendedor</Label>
+        <Input value={sellerName} onChange={(e) => setSellerName(e.target.value)} placeholder="Nombre del vendedor" required />
+      </div>
+
       <div>
         <Label>Cliente</Label>
         <Select value={customerId} onValueChange={setCustomerId}>
@@ -144,8 +164,8 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
         </div>
       )}
 
-      <Button className="w-full" onClick={handleSubmit} disabled={!customerId || items.length === 0}>
-        Registrar venta
+      <Button className="w-full" onClick={handleSubmit} disabled={!customerId || items.length === 0 || !sellerName.trim() || submitting}>
+        {submitting ? 'Registrando...' : 'Registrar venta'}
       </Button>
     </div>
   );
@@ -155,11 +175,17 @@ const PaymentDialog = ({ sale, onClose }: { sale: Sale; onClose: () => void }) =
   const { addPayment } = useStore();
   const [amount, setAmount] = useState(sale.balance.toString());
   const [method, setMethod] = useState<PaymentMethod>('efectivo');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    addPayment(sale.id, { amount: parseFloat(amount), method, date: new Date().toISOString() });
-    onClose();
+    setSubmitting(true);
+    try {
+      await addPayment(sale.id, { amount: parseFloat(amount), method, date: new Date().toISOString() });
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -176,7 +202,7 @@ const PaymentDialog = ({ sale, onClose }: { sale: Sale; onClose: () => void }) =
           </SelectContent>
         </Select>
       </div>
-      <Button type="submit" className="w-full">Registrar abono</Button>
+      <Button type="submit" className="w-full" disabled={submitting}>{submitting ? 'Registrando...' : 'Registrar abono'}</Button>
     </form>
   );
 };
@@ -219,6 +245,7 @@ const SalesPage = () => {
           {viewSale && (
             <div className="space-y-3">
               <p className="text-sm"><span className="text-muted-foreground">Cliente:</span> {viewSale.customerName}</p>
+              <p className="text-sm"><span className="text-muted-foreground">Vendedor:</span> {viewSale.sellerName || '—'}</p>
               <p className="text-sm"><span className="text-muted-foreground">Fecha:</span> {new Date(viewSale.createdAt).toLocaleString()}</p>
               <div className="border rounded-lg p-3 space-y-1">
                 {viewSale.items.map((item, i) => (
@@ -258,7 +285,7 @@ const SalesPage = () => {
               <div className="flex items-center justify-between mb-1">
                 <div>
                   <p className="font-medium text-sm">{sale.customerName}</p>
-                  <p className="text-xs text-muted-foreground">{new Date(sale.createdAt).toLocaleDateString()} · {sale.items.length} items</p>
+                  <p className="text-xs text-muted-foreground">{new Date(sale.createdAt).toLocaleDateString()} · {sale.items.length} items{sale.sellerName ? ` · 🧑‍💼 ${sale.sellerName}` : ''}</p>
                 </div>
                 <div className="text-right">
                   <p className="font-bold text-sm">${sale.total.toFixed(2)}</p>
