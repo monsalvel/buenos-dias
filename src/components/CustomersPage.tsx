@@ -1,0 +1,135 @@
+import { useState } from 'react';
+import { useStore } from '@/store/useStore';
+import { Customer } from '@/types';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Plus, Phone, MapPin, Star, MessageCircle } from 'lucide-react';
+
+const CustomerForm = ({ customer, onSave, onClose }: { customer?: Customer; onSave: (data: any) => void; onClose: () => void }) => {
+  const [firstName, setFirstName] = useState(customer?.firstName || '');
+  const [lastName, setLastName] = useState(customer?.lastName || '');
+  const [phone, setPhone] = useState(customer?.phone || '');
+  const [address, setAddress] = useState(customer?.address || '');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave({ firstName, lastName, phone, address });
+    onClose();
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Nombre</Label><Input value={firstName} onChange={(e) => setFirstName(e.target.value)} required /></div>
+        <div><Label>Apellido</Label><Input value={lastName} onChange={(e) => setLastName(e.target.value)} required /></div>
+      </div>
+      <div><Label>Teléfono</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="+584121234567" /></div>
+      <div><Label>Dirección (opcional)</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle, casa, referencia" /></div>
+      <Button type="submit" className="w-full">{customer ? 'Guardar' : 'Agregar cliente'}</Button>
+    </form>
+  );
+};
+
+const CustomersPage = () => {
+  const { customers, addCustomer, updateCustomer, sales } = useStore();
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Customer | undefined>();
+  const [search, setSearch] = useState('');
+
+  const filtered = customers.filter((c) =>
+    `${c.firstName} ${c.lastName}`.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const getCustomerDebt = (customerId: string) => {
+    return sales
+      .filter((s) => s.customerId === customerId && s.status !== 'anulado')
+      .reduce((sum, s) => sum + s.balance, 0);
+  };
+
+  const sendWhatsApp = (phone: string, name: string, debt: number) => {
+    const msg = encodeURIComponent(`Hola ${name}, te escribimos de la panadería. Tienes un saldo pendiente de $${debt.toFixed(2)}. ¿Cuándo podrías pasar a abonar? ¡Gracias! 🍞`);
+    window.open(`https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=${msg}`, '_blank');
+  };
+
+  const handleSave = (data: any) => {
+    if (editing) updateCustomer(editing.id, data);
+    else addCustomer(data);
+    setEditing(undefined);
+  };
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-display font-bold">Clientes</h1>
+          <p className="text-muted-foreground text-sm">{customers.length} registrados</p>
+        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" onClick={() => { setEditing(undefined); setOpen(true); }}><Plus className="w-4 h-4 mr-1" />Nuevo</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>{editing ? 'Editar' : 'Nuevo'} cliente</DialogTitle></DialogHeader>
+            <CustomerForm customer={editing} onSave={handleSave} onClose={() => setOpen(false)} />
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <Input placeholder="Buscar cliente..." value={search} onChange={(e) => setSearch(e.target.value)} />
+
+      <div className="space-y-2">
+        {filtered.sort((a, b) => b.totalPurchases - a.totalPurchases).map((c) => {
+          const debt = getCustomerDebt(c.id);
+          return (
+            <Card key={c.id} className="cursor-pointer" onClick={() => { setEditing(c); setOpen(true); }}>
+              <CardContent className="p-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center text-primary font-bold">
+                      {c.firstName[0]}{c.lastName[0]}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1">
+                        <p className="font-medium text-sm">{c.firstName} {c.lastName}</p>
+                        {c.totalPurchases >= 10 && <Star className="w-3 h-3 text-warning fill-warning" />}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Phone className="w-3 h-3" />{c.phone}
+                      </div>
+                      {c.address && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <MapPin className="w-3 h-3" />{c.address}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">{c.totalPurchases} compras</p>
+                    {debt > 0 && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <span className="text-xs font-bold text-destructive">Debe: ${debt.toFixed(2)}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-success"
+                          onClick={(e) => { e.stopPropagation(); sendWhatsApp(c.phone, c.firstName, debt); }}
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+export default CustomersPage;
