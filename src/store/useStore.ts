@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
-import { Product, Customer, Sale, Payment, SaleItem, SaleStatus, PaymentMethod, BcvRate } from '@/types';
+import { Product, Customer, Sale, Payment, SaleItem, SaleStatus, PaymentMethod, BcvRate, StoreSettings } from '@/types';
 import { getLocalDateString } from '@/lib/utils';
 
 // Map DB rows to app types
@@ -29,6 +29,7 @@ interface AppState {
   customers: Customer[];
   sales: Sale[];
   bcvRate: BcvRate | null;
+  storeSettings: StoreSettings | null;
   loading: boolean;
 
   // Data fetching
@@ -50,6 +51,9 @@ interface AppState {
   addPayment: (saleId: string, payment: Omit<Payment, 'id'>) => Promise<void>;
   cancelSale: (saleId: string) => Promise<void>;
 
+  // Store settings
+  updateStoreSettings: (s: Partial<StoreSettings>) => Promise<void>;
+
   // Helpers
   getFrequentCustomers: () => Customer[];
   getTodayStats: () => { income: number; profit: number; receivables: number; salesCount: number };
@@ -60,6 +64,7 @@ export const useStore = create<AppState>()((set, get) => ({
   customers: [],
   sales: [],
   bcvRate: null,
+  storeSettings: null,
   loading: true,
 
   fetchAll: async () => {
