@@ -319,6 +319,20 @@ export const useStore = create<AppState>()((set, get) => ({
     }));
   },
 
+  updateStoreSettings: async (s) => {
+    const current = get().storeSettings;
+    const update: any = {};
+    if (s.storeName !== undefined) update.store_name = s.storeName;
+    if (s.phone !== undefined) update.phone = s.phone;
+    if (s.bank !== undefined) update.bank = s.bank;
+    if (s.cedula !== undefined) update.cedula = s.cedula;
+
+    if (current) {
+      await supabase.from('store_settings').update(update).eq('id', current.id);
+      set({ storeSettings: { ...current, ...s } });
+    }
+  },
+
   getFrequentCustomers: () => {
     return [...get().customers].sort((a, b) => b.totalPurchases - a.totalPurchases).slice(0, 5);
   },
