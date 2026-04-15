@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
 import { Product, Customer, Sale, Payment, SaleItem, SaleStatus, PaymentMethod, BcvRate } from '@/types';
+import { getLocalDateString } from '@/lib/utils';
 
 // Map DB rows to app types
 const mapProduct = (r: any): Product => ({
@@ -306,9 +307,11 @@ export const useStore = create<AppState>()((set, get) => ({
   },
 
   getTodayStats: () => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalDateString();
+    console.log(todayStr);
+    // Filtramos las ventas no anuladas que localmente ocurrieron hoy
     const todaySales = get().sales.filter(
-      (s) => s.createdAt.split('T')[0] === todayStr && s.status !== 'anulado'
+      (s) => s.status !== 'anulado' && getLocalDateString(s.createdAt) === todayStr
     );
     const allActive = get().sales.filter((s) => s.status !== 'anulado');
     return {

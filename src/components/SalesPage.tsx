@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Plus, Minus, DollarSign, Eye, CalendarClock, Check, ChevronsUpDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, getLocalDateString } from '@/lib/utils';
 
 const paymentLabels: Record<PaymentMethod, string> = {
   efectivo: '💵 Efectivo',
@@ -215,7 +215,7 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
           </div>
           <div>
             <Label className="flex items-center gap-1.5"><CalendarClock className="w-3.5 h-3.5" />Fecha límite de pago</Label>
-            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} min={new Date().toISOString().split('T')[0]} />
+            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} min={getLocalDateString()} />
             <p className="text-[10px] text-muted-foreground mt-1">Se te recordará cuando llegue esta fecha</p>
           </div>
         </>
