@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
-import { Product, Customer, Sale, Payment, SaleItem, SaleStatus, PaymentMethod, BcvRate } from '@/types';
+import { Product, Customer, Sale, Payment, SaleItem, SaleStatus, PaymentMethod, BcvRate, StoreSettings } from '@/types';
 import { getLocalDateString } from '@/lib/utils';
 
 // Map DB rows to app types
@@ -29,6 +29,7 @@ interface AppState {
   customers: Customer[];
   sales: Sale[];
   bcvRate: BcvRate | null;
+  storeSettings: StoreSettings | null;
   loading: boolean;
 
   // Data fetching
@@ -50,6 +51,9 @@ interface AppState {
   addPayment: (saleId: string, payment: Omit<Payment, 'id'>) => Promise<void>;
   cancelSale: (saleId: string) => Promise<void>;
 
+  // Store settings
+  updateStoreSettings: (s: Partial<StoreSettings>) => Promise<void>;
+
   // Helpers
   getFrequentCustomers: () => Customer[];
   getTodayStats: () => { income: number; profit: number; receivables: number; salesCount: number };
@@ -60,6 +64,7 @@ export const useStore = create<AppState>()((set, get) => ({
   customers: [],
   sales: [],
   bcvRate: null,
+  storeSettings: null,
   loading: true,
 
   fetchAll: async () => {
@@ -118,7 +123,19 @@ export const useStore = create<AppState>()((set, get) => ({
       rate: Number(rateData.rate), fetchedAt: rateData.fetched_at,
     } : null;
 
-    set({ products, customers, sales, bcvRate, loading: false });
+    // Fetch store settings
+    const { data: settingsData } = await supabase
+      .from('store_settings')
+      .select('*')
+      .limit(1)
+      .maybeSingle();
+
+    const storeSettings: StoreSettings | null = settingsData ? {
+      id: settingsData.id, storeName: settingsData.store_name,
+      phone: settingsData.phone, bank: settingsData.bank, cedula: settingsData.cedula,
+    } : null;
+
+    set({ products, customers, sales, bcvRate, storeSettings, loading: false });
   },
 
   fetchBcvRate: async () => {
@@ -252,7 +269,7 @@ export const useStore = create<AppState>()((set, get) => ({
       paymentMethod: saleData.payment_method as PaymentMethod,
       createdAt: saleData.created_at,
       updatedAt: saleData.updated_at,
-      dueDate: saleData.due_date || undefined,
+      dueDate: (saleData as any).due_date || undefined,
       items: (itemsData || []).map(mapSaleItem),
       payments: paymentsData.map(mapPayment),
     };
@@ -300,6 +317,20 @@ export const useStore = create<AppState>()((set, get) => ({
         sl.id === saleId ? { ...sl, status: 'anulado' as SaleStatus, updatedAt: new Date().toISOString() } : sl
       ),
     }));
+  },
+
+  updateStoreSettings: async (s) => {
+    const current = get().storeSettings;
+    const update: any = {};
+    if (s.storeName !== undefined) update.store_name = s.storeName;
+    if (s.phone !== undefined) update.phone = s.phone;
+    if (s.bank !== undefined) update.bank = s.bank;
+    if (s.cedula !== undefined) update.cedula = s.cedula;
+
+    if (current) {
+      await supabase.from('store_settings').update(update).eq('id', current.id);
+      set({ storeSettings: { ...current, ...s } });
+    }
   },
 
   getFrequentCustomers: () => {

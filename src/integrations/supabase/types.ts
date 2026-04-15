@@ -240,6 +240,33 @@ export type Database = {
           },
         ]
       }
+      store_settings: {
+        Row: {
+          bank: string
+          cedula: string
+          id: string
+          phone: string
+          store_name: string
+          updated_at: string
+        }
+        Insert: {
+          bank?: string
+          cedula?: string
+          id?: string
+          phone?: string
+          store_name?: string
+          updated_at?: string
+        }
+        Update: {
+          bank?: string
+          cedula?: string
+          id?: string
+          phone?: string
+          store_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

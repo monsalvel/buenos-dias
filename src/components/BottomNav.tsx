@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShoppingCart, Users, Package } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Users, Package, Settings } from 'lucide-react';
 import { TabId } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -12,6 +12,7 @@ const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
   { id: 'sales', label: 'Ventas', icon: ShoppingCart },
   { id: 'customers', label: 'Clientes', icon: Users },
   { id: 'products', label: 'Productos', icon: Package },
+  { id: 'settings', label: 'Ajustes', icon: Settings },
 ];
 
 const BottomNav = ({ activeTab, onTabChange }: BottomNavProps) => {

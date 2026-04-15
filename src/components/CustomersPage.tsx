@@ -40,7 +40,7 @@ const CustomerForm = ({ customer, onSave, onClose }: { customer?: Customer; onSa
 };
 
 const CustomersPage = () => {
-  const { customers, addCustomer, updateCustomer, sales } = useStore();
+  const { customers, addCustomer, updateCustomer, sales, storeSettings } = useStore();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | undefined>();
   const [search, setSearch] = useState('');
@@ -55,9 +55,42 @@ const CustomersPage = () => {
       .reduce((sum, s) => sum + s.balance, 0);
   };
 
-  const sendWhatsApp = (phone: string, name: string, debt: number) => {
-    const msg = encodeURIComponent(`Hola ${name}, te escribimos de la panadería. Tienes un saldo pendiente de $${debt.toFixed(2)}. ¿Cuándo podrías pasar a abonar? ¡Gracias! 🍞`);
-    window.open(`https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=${msg}`, '_blank');
+  const getCustomerPendingSales = (customerId: string) => {
+    return sales.filter(
+      (s) => s.customerId === customerId && s.balance > 0 && s.status !== 'anulado'
+    );
+  };
+
+  const sendWhatsApp = (phone: string, name: string, customerId: string) => {
+    const pendingSales = getCustomerPendingSales(customerId);
+    const totalDebt = pendingSales.reduce((sum, s) => sum + s.balance, 0);
+
+    let msg = `¡Hola ${name}! 👋🍞\n\n`;
+    msg += `Te escribimos desde *${storeSettings?.storeName || 'la panadería'}* para recordarte que tienes un saldo pendiente.\n\n`;
+    msg += `📋 *Detalle de pedidos pendientes:*\n`;
+
+    pendingSales.forEach((sale, i) => {
+      const date = new Date(sale.createdAt).toLocaleDateString('es-VE');
+      msg += `\n🧾 *Pedido ${i + 1}* (${date})\n`;
+      sale.items.forEach((item) => {
+        msg += `  • ${item.productName} x${item.quantity} — $${item.subtotal.toFixed(2)}\n`;
+      });
+      msg += `  Total: $${sale.total.toFixed(2)} | Abonado: $${sale.amountPaid.toFixed(2)} | *Pendiente: $${sale.balance.toFixed(2)}*\n`;
+    });
+
+    msg += `\n💰 *Total pendiente: $${totalDebt.toFixed(2)}*\n`;
+
+    if (storeSettings?.bank || storeSettings?.cedula || storeSettings?.phone) {
+      msg += `\n🏦 *Datos para el pago:*\n`;
+      if (storeSettings.bank) msg += `  Banco: ${storeSettings.bank}\n`;
+      if (storeSettings.cedula) msg += `  Cédula: ${storeSettings.cedula}\n`;
+      if (storeSettings.phone) msg += `  Teléfono: ${storeSettings.phone}\n`;
+    }
+
+    msg += `\n¡Gracias por tu preferencia! 😊🍞`;
+
+    const encoded = encodeURIComponent(msg);
+    window.open(`https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=${encoded}`, '_blank');
   };
 
   const handleSave = async (data: any) => {
@@ -114,14 +147,14 @@ const CustomersPage = () => {
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-muted-foreground">{c.totalPurchases} compras</p>
-                    {debt > 0 && (
+                      {debt > 0 && (
                       <div className="flex items-center gap-1 mt-1">
                         <span className="text-xs font-bold text-destructive">Debe: ${debt.toFixed(2)}</span>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 text-success"
-                          onClick={(e) => { e.stopPropagation(); sendWhatsApp(c.phone, c.firstName, debt); }}
+                          onClick={(e) => { e.stopPropagation(); sendWhatsApp(c.phone, c.firstName, c.id); }}
                         >
                           <MessageCircle className="w-3.5 h-3.5" />
                         </Button>

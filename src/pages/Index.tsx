@@ -6,12 +6,14 @@ import Dashboard from '@/components/Dashboard';
 import SalesPage from '@/components/SalesPage';
 import CustomersPage from '@/components/CustomersPage';
 import ProductsPage from '@/components/ProductsPage';
+import SettingsPage from '@/components/SettingsPage';
 
 const pages: Record<TabId, React.ComponentType> = {
   dashboard: Dashboard,
   sales: SalesPage,
   customers: CustomersPage,
   products: ProductsPage,
+  settings: SettingsPage,
 };
 
 const Index = () => {
