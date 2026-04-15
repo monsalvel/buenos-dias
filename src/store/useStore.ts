@@ -123,7 +123,19 @@ export const useStore = create<AppState>()((set, get) => ({
       rate: Number(rateData.rate), fetchedAt: rateData.fetched_at,
     } : null;
 
-    set({ products, customers, sales, bcvRate, loading: false });
+    // Fetch store settings
+    const { data: settingsData } = await supabase
+      .from('store_settings')
+      .select('*')
+      .limit(1)
+      .maybeSingle();
+
+    const storeSettings: StoreSettings | null = settingsData ? {
+      id: settingsData.id, storeName: settingsData.store_name,
+      phone: settingsData.phone, bank: settingsData.bank, cedula: settingsData.cedula,
+    } : null;
+
+    set({ products, customers, sales, bcvRate, storeSettings, loading: false });
   },
 
   fetchBcvRate: async () => {
@@ -257,7 +269,7 @@ export const useStore = create<AppState>()((set, get) => ({
       paymentMethod: saleData.payment_method as PaymentMethod,
       createdAt: saleData.created_at,
       updatedAt: saleData.updated_at,
-      dueDate: saleData.due_date || undefined,
+      dueDate: (saleData as any).due_date || undefined,
       items: (itemsData || []).map(mapSaleItem),
       payments: paymentsData.map(mapPayment),
     };
