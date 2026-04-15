@@ -69,4 +69,12 @@ export interface BcvRate {
   fetchedAt: string;
 }
 
-export type TabId = 'dashboard' | 'sales' | 'customers' | 'products';
+export interface StoreSettings {
+  id: string;
+  storeName: string;
+  phone: string;
+  bank: string;
+  cedula: string;
+}
+
+export type TabId = 'dashboard' | 'sales' | 'customers' | 'products' | 'settings';
