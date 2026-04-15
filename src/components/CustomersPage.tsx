@@ -147,14 +147,14 @@ const CustomersPage = () => {
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-muted-foreground">{c.totalPurchases} compras</p>
-                    {debt > 0 && (
+                      {debt > 0 && (
                       <div className="flex items-center gap-1 mt-1">
                         <span className="text-xs font-bold text-destructive">Debe: ${debt.toFixed(2)}</span>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 text-success"
-                          onClick={(e) => { e.stopPropagation(); sendWhatsApp(c.phone, c.firstName, debt); }}
+                          onClick={(e) => { e.stopPropagation(); sendWhatsApp(c.phone, c.firstName, c.id); }}
                         >
                           <MessageCircle className="w-3.5 h-3.5" />
                         </Button>
