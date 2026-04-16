@@ -388,7 +388,7 @@ const SalesPage = () => {
 
       <div className="space-y-2">
         {sorted.map((sale) => (
-          <Card key={sale.id}>
+          <Card key={sale.id} className={sale.dueDate && sale.dueDate <= todayStr && sale.status !== 'anulado' && sale.status !== 'pagado' ? 'border-destructive/40' : ''}>
             <CardContent className="p-3">
               <div className="flex items-center justify-between mb-1">
                 <div>
@@ -400,6 +400,18 @@ const SalesPage = () => {
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase ${statusColors[sale.status]}`}>{sale.status}</span>
                 </div>
               </div>
+              {sale.dueDate && sale.balance > 0 && sale.status !== 'anulado' && (
+                <div className={`flex items-center gap-1.5 text-[10px] mt-1 px-2 py-1 rounded-md ${
+                  sale.dueDate === todayStr ? 'bg-warning/10 text-warning font-bold' :
+                  sale.dueDate < todayStr ? 'bg-destructive/10 text-destructive font-bold' :
+                  'text-muted-foreground'
+                }`}>
+                  <CalendarClock className="w-3 h-3" />
+                  {sale.dueDate === todayStr ? '⏰ Vence HOY' :
+                   sale.dueDate < todayStr ? `🚨 Vencido (${new Date(sale.dueDate + 'T00:00:00').toLocaleDateString('es-VE')})` :
+                   `Vence: ${new Date(sale.dueDate + 'T00:00:00').toLocaleDateString('es-VE')}`}
+                </div>
+              )}
               <div className="flex gap-1 mt-2">
                 <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setViewSale(sale)}><Eye className="w-3 h-3 mr-1" />Ver</Button>
                 {(sale.status === 'deuda' || sale.status === 'abonado') && (
