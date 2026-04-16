@@ -1,0 +1,1 @@
+ALTER TABLE public.sales ADD COLUMN due_date date;
