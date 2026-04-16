@@ -5,6 +5,7 @@ export interface Product {
   cost: number;
   price: number;
   description?: string;
+  stock?: number;
   active: boolean;
   createdAt: string;
 }
@@ -77,4 +78,4 @@ export interface StoreSettings {
   cedula: string;
 }
 
-export type TabId = 'dashboard' | 'sales' | 'customers' | 'products' | 'settings';
+export type TabId = 'dashboard' | 'sales' | 'customers' | 'products' | 'stock' | 'settings';

@@ -6,6 +6,7 @@ import Dashboard from '@/components/Dashboard';
 import SalesPage from '@/components/SalesPage';
 import CustomersPage from '@/components/CustomersPage';
 import ProductsPage from '@/components/ProductsPage';
+import StockPage from '@/components/StockPage';
 import SettingsPage from '@/components/SettingsPage';
 
 const pages: Record<TabId, React.ComponentType> = {
@@ -13,6 +14,7 @@ const pages: Record<TabId, React.ComponentType> = {
   sales: SalesPage,
   customers: CustomersPage,
   products: ProductsPage,
+  stock: StockPage,
   settings: SettingsPage,
 };
 

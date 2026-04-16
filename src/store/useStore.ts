@@ -6,7 +6,7 @@ import { getLocalDateString } from '@/lib/utils';
 // Map DB rows to app types
 const mapProduct = (r: any): Product => ({
   id: r.id, name: r.name, category: r.category, cost: Number(r.cost),
-  price: Number(r.price), description: r.description, active: r.active, createdAt: r.created_at,
+  price: Number(r.price), description: r.description, stock: r.stock ?? 0, active: r.active, createdAt: r.created_at,
 });
 
 const mapCustomer = (r: any): Customer => ({
@@ -171,6 +171,7 @@ export const useStore = create<AppState>()((set, get) => ({
     if (p.price !== undefined) update.price = p.price;
     if (p.active !== undefined) update.active = p.active;
     if (p.description !== undefined) update.description = p.description;
+    if (p.stock !== undefined) update.stock = p.stock;
 
     const { error } = await supabase.from('products').update(update).eq('id', id);
     if (error) throw error;
@@ -347,7 +348,7 @@ export const useStore = create<AppState>()((set, get) => ({
     const allActive = get().sales.filter((s) => s.status !== 'anulado');
     return {
       income: todaySales.reduce((sum, s) => sum + s.amountPaid, 0),
-      profit: todaySales.reduce((sum, s) => sum + (s.amountPaid - s.totalCost), 0),
+      profit: todaySales.reduce((sum, s) => sum + (s.total - s.totalCost), 0),
       receivables: allActive.reduce((sum, s) => sum + s.balance, 0),
       salesCount: todaySales.length,
     };

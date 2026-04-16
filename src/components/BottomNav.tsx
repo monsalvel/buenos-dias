@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShoppingCart, Users, Package, Settings } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Users, Package, Settings, Warehouse } from 'lucide-react';
 import { TabId } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -10,6 +10,7 @@ interface BottomNavProps {
 const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
   { id: 'sales', label: 'Ventas', icon: ShoppingCart },
+  { id: 'stock', label: 'Stock', icon: Warehouse },
   { id: 'customers', label: 'Clientes', icon: Users },
   { id: 'products', label: 'Productos', icon: Package },
   { id: 'settings', label: 'Ajustes', icon: Settings },
