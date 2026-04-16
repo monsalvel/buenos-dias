@@ -222,6 +222,7 @@ export const useStore = create<AppState>()((set, get) => ({
       balance: sale.balance,
       status: sale.status,
       payment_method: sale.paymentMethod,
+      due_date: dueDate || null,
     };
     const { data: saleData, error: saleErr } = await supabase.from('sales').insert(insertData).select().single();
     if (saleErr) throw saleErr;

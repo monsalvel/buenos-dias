@@ -8,6 +8,7 @@ import CustomersPage from '@/components/CustomersPage';
 import ProductsPage from '@/components/ProductsPage';
 import StockPage from '@/components/StockPage';
 import SettingsPage from '@/components/SettingsPage';
+import NotificationBell from '@/components/NotificationBell';
 
 const pages: Record<TabId, React.ComponentType> = {
   dashboard: Dashboard,
@@ -41,6 +42,9 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-lg mx-auto px-4 pt-6 pb-20">
+        <div className="flex justify-end mb-2">
+          <NotificationBell onNavigateToSales={() => setActiveTab('sales')} />
+        </div>
         <ActivePage />
       </div>
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />

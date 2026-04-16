@@ -270,10 +270,48 @@ const SalesPage = () => {
   const [payingSale, setPayingSale] = useState<Sale | null>(null);
   const [viewSale, setViewSale] = useState<Sale | null>(null);
 
+  const todayStr = getLocalDateString();
+  const dueTodaySales = sales.filter(
+    (s) => s.status !== 'anulado' && s.status !== 'pagado' && s.dueDate === todayStr
+  );
+  const overdueSales = sales.filter(
+    (s) => s.status !== 'anulado' && s.status !== 'pagado' && s.dueDate && s.dueDate < todayStr
+  );
+
   const sorted = [...sales].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   return (
     <div className="space-y-4 animate-fade-in">
+      {dueTodaySales.length > 0 && (
+        <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 animate-fade-in">
+          <p className="text-sm font-bold text-warning flex items-center gap-1.5">
+            <CalendarClock className="w-4 h-4" /> ⏰ {dueTodaySales.length} crédito{dueTodaySales.length > 1 ? 's' : ''} vence{dueTodaySales.length > 1 ? 'n' : ''} hoy
+          </p>
+          <div className="mt-1.5 space-y-1">
+            {dueTodaySales.map((s) => (
+              <p key={s.id} className="text-xs text-warning/80">
+                • {s.customerName} — <span className="font-bold">${s.balance.toFixed(2)}</span> pendiente
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {overdueSales.length > 0 && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 animate-fade-in">
+          <p className="text-sm font-bold text-destructive flex items-center gap-1.5">
+            🚨 {overdueSales.length} crédito{overdueSales.length > 1 ? 's' : ''} vencido{overdueSales.length > 1 ? 's' : ''}
+          </p>
+          <div className="mt-1.5 space-y-1">
+            {overdueSales.map((s) => (
+              <p key={s.id} className="text-xs text-destructive/80">
+                • {s.customerName} — <span className="font-bold">${s.balance.toFixed(2)}</span> (venció {new Date(s.dueDate! + 'T00:00:00').toLocaleDateString('es-VE')})
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-display font-bold">Ventas</h1>
@@ -350,7 +388,7 @@ const SalesPage = () => {
 
       <div className="space-y-2">
         {sorted.map((sale) => (
-          <Card key={sale.id}>
+          <Card key={sale.id} className={sale.dueDate && sale.dueDate <= todayStr && sale.status !== 'anulado' && sale.status !== 'pagado' ? 'border-destructive/40' : ''}>
             <CardContent className="p-3">
               <div className="flex items-center justify-between mb-1">
                 <div>
@@ -362,6 +400,18 @@ const SalesPage = () => {
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase ${statusColors[sale.status]}`}>{sale.status}</span>
                 </div>
               </div>
+              {sale.dueDate && sale.balance > 0 && sale.status !== 'anulado' && (
+                <div className={`flex items-center gap-1.5 text-[10px] mt-1 px-2 py-1 rounded-md ${
+                  sale.dueDate === todayStr ? 'bg-warning/10 text-warning font-bold' :
+                  sale.dueDate < todayStr ? 'bg-destructive/10 text-destructive font-bold' :
+                  'text-muted-foreground'
+                }`}>
+                  <CalendarClock className="w-3 h-3" />
+                  {sale.dueDate === todayStr ? '⏰ Vence HOY' :
+                   sale.dueDate < todayStr ? `🚨 Vencido (${new Date(sale.dueDate + 'T00:00:00').toLocaleDateString('es-VE')})` :
+                   `Vence: ${new Date(sale.dueDate + 'T00:00:00').toLocaleDateString('es-VE')}`}
+                </div>
+              )}
               <div className="flex gap-1 mt-2">
                 <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setViewSale(sale)}><Eye className="w-3 h-3 mr-1" />Ver</Button>
                 {(sale.status === 'deuda' || sale.status === 'abonado') && (
