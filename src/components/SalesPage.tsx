@@ -270,10 +270,48 @@ const SalesPage = () => {
   const [payingSale, setPayingSale] = useState<Sale | null>(null);
   const [viewSale, setViewSale] = useState<Sale | null>(null);
 
+  const todayStr = getLocalDateString();
+  const dueTodaySales = sales.filter(
+    (s) => s.status !== 'anulado' && s.status !== 'pagado' && s.dueDate === todayStr
+  );
+  const overdueSales = sales.filter(
+    (s) => s.status !== 'anulado' && s.status !== 'pagado' && s.dueDate && s.dueDate < todayStr
+  );
+
   const sorted = [...sales].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   return (
     <div className="space-y-4 animate-fade-in">
+      {dueTodaySales.length > 0 && (
+        <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 animate-fade-in">
+          <p className="text-sm font-bold text-warning flex items-center gap-1.5">
+            <CalendarClock className="w-4 h-4" /> ⏰ {dueTodaySales.length} crédito{dueTodaySales.length > 1 ? 's' : ''} vence{dueTodaySales.length > 1 ? 'n' : ''} hoy
+          </p>
+          <div className="mt-1.5 space-y-1">
+            {dueTodaySales.map((s) => (
+              <p key={s.id} className="text-xs text-warning/80">
+                • {s.customerName} — <span className="font-bold">${s.balance.toFixed(2)}</span> pendiente
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {overdueSales.length > 0 && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 animate-fade-in">
+          <p className="text-sm font-bold text-destructive flex items-center gap-1.5">
+            🚨 {overdueSales.length} crédito{overdueSales.length > 1 ? 's' : ''} vencido{overdueSales.length > 1 ? 's' : ''}
+          </p>
+          <div className="mt-1.5 space-y-1">
+            {overdueSales.map((s) => (
+              <p key={s.id} className="text-xs text-destructive/80">
+                • {s.customerName} — <span className="font-bold">${s.balance.toFixed(2)}</span> (venció {new Date(s.dueDate! + 'T00:00:00').toLocaleDateString('es-VE')})
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-display font-bold">Ventas</h1>
