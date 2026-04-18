@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
-import { Product, Customer, Sale, Payment, SaleItem, SaleStatus, PaymentMethod, BcvRate, StoreSettings } from '@/types';
+import { Product, Customer, Sale, Payment, SaleItem, SaleStatus, PaymentMethod, BcvRate, StoreSettings, ProductBatch } from '@/types';
 import { getLocalDateString } from '@/lib/utils';
 
 // Map DB rows to app types
@@ -24,10 +24,17 @@ const mapSaleItem = (r: any): SaleItem => ({
   quantity: r.quantity, unitPrice: Number(r.unit_price), unitCost: Number(r.unit_cost), subtotal: Number(r.subtotal),
 });
 
+const mapBatch = (r: any): ProductBatch => ({
+  id: r.id, productId: r.product_id, unitCost: Number(r.unit_cost),
+  quantityReceived: r.quantity_received, quantityRemaining: r.quantity_remaining,
+  receivedAt: r.received_at, note: r.note ?? undefined,
+});
+
 interface AppState {
   products: Product[];
   customers: Customer[];
   sales: Sale[];
+  batches: ProductBatch[];
   bcvRate: BcvRate | null;
   storeSettings: StoreSettings | null;
   loading: boolean;
@@ -35,11 +42,16 @@ interface AppState {
   // Data fetching
   fetchAll: () => Promise<void>;
   fetchBcvRate: () => Promise<void>;
+  fetchBatches: () => Promise<void>;
 
   // Product actions
   addProduct: (p: Omit<Product, 'id' | 'createdAt' | 'active'>) => Promise<void>;
   updateProduct: (id: string, p: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
+
+  // Batch actions
+  addBatch: (productId: string, quantity: number, unitCost: number, note?: string) => Promise<void>;
+  adjustBatchRemaining: (batchId: string, newRemaining: number) => Promise<void>;
 
   // Customer actions
   addCustomer: (c: Omit<Customer, 'id' | 'createdAt' | 'totalPurchases' | 'totalSpent'>) => Promise<void>;
@@ -63,20 +75,23 @@ export const useStore = create<AppState>()((set, get) => ({
   products: [],
   customers: [],
   sales: [],
+  batches: [],
   bcvRate: null,
   storeSettings: null,
   loading: true,
 
   fetchAll: async () => {
     set({ loading: true });
-    const [prodRes, custRes, salesRes] = await Promise.all([
+    const [prodRes, custRes, salesRes, batchesRes] = await Promise.all([
       supabase.from('products').select('*').order('created_at'),
       supabase.from('customers').select('*').order('created_at'),
       supabase.from('sales').select('*').order('created_at', { ascending: false }),
+      supabase.from('product_batches').select('*').order('received_at', { ascending: false }),
     ]);
 
     const products = (prodRes.data || []).map(mapProduct);
     const customers = (custRes.data || []).map(mapCustomer);
+    const batches = (batchesRes.data || []).map(mapBatch);
 
     // Fetch items and payments for all sales
     const saleIds = (salesRes.data || []).map((s: any) => s.id);
@@ -135,7 +150,12 @@ export const useStore = create<AppState>()((set, get) => ({
       phone: settingsData.phone, bank: settingsData.bank, cedula: settingsData.cedula,
     } : null;
 
-    set({ products, customers, sales, bcvRate, storeSettings, loading: false });
+    set({ products, customers, sales, batches, bcvRate, storeSettings, loading: false });
+  },
+
+  fetchBatches: async () => {
+    const { data } = await supabase.from('product_batches').select('*').order('received_at', { ascending: false });
+    set({ batches: (data || []).map(mapBatch) });
   },
 
   fetchBcvRate: async () => {
@@ -184,6 +204,41 @@ export const useStore = create<AppState>()((set, get) => ({
     set((s) => ({ products: s.products.map((p) => p.id === id ? { ...p, active: false } : p) }));
   },
 
+  addBatch: async (productId, quantity, unitCost, note) => {
+    const { data, error } = await supabase.from('product_batches').insert({
+      product_id: productId,
+      unit_cost: unitCost,
+      quantity_received: quantity,
+      quantity_remaining: quantity,
+      note: note || null,
+    }).select().single();
+    if (error) throw error;
+
+    // The trigger updated products.stock — refresh that one product
+    const { data: prodData } = await supabase.from('products').select('*').eq('id', productId).single();
+    set((s) => ({
+      batches: [mapBatch(data), ...s.batches],
+      products: prodData ? s.products.map((p) => p.id === productId ? mapProduct(prodData) : p) : s.products,
+    }));
+  },
+
+  adjustBatchRemaining: async (batchId, newRemaining) => {
+    const batch = get().batches.find((b) => b.id === batchId);
+    if (!batch) return;
+    const safe = Math.max(0, Math.min(newRemaining, batch.quantityReceived));
+    const { error } = await supabase
+      .from('product_batches')
+      .update({ quantity_remaining: safe })
+      .eq('id', batchId);
+    if (error) throw error;
+
+    const { data: prodData } = await supabase.from('products').select('*').eq('id', batch.productId).single();
+    set((s) => ({
+      batches: s.batches.map((b) => b.id === batchId ? { ...b, quantityRemaining: safe } : b),
+      products: prodData ? s.products.map((p) => p.id === batch.productId ? mapProduct(prodData) : p) : s.products,
+    }));
+  },
+
   addCustomer: async (c) => {
     const { data, error } = await supabase.from('customers').insert({
       first_name: c.firstName, last_name: c.lastName, phone: c.phone, address: c.address,
@@ -211,13 +266,24 @@ export const useStore = create<AppState>()((set, get) => ({
   },
 
   addSale: async (sale, items, payments, dueDate) => {
-    // Insert sale (due_date stored locally only until DB column is added)
+    // Consume FIFO for each item to get the real unit cost from batches
+    const adjustedItems = await Promise.all(items.map(async (i) => {
+      const { data: realCost } = await supabase.rpc('consume_stock_fifo', {
+        _product_id: i.productId,
+        _qty: i.quantity,
+      });
+      const unitCost = realCost != null ? Number(realCost) : i.unitCost;
+      return { ...i, unitCost };
+    }));
+
+    const totalCost = adjustedItems.reduce((sum, i) => sum + i.unitCost * i.quantity, 0);
+
     const insertData: any = {
       customer_id: sale.customerId,
       customer_name: sale.customerName,
       seller_name: sale.sellerName,
       total: sale.total,
-      total_cost: sale.totalCost,
+      total_cost: totalCost,
       amount_paid: sale.amountPaid,
       balance: sale.balance,
       status: sale.status,
@@ -227,8 +293,8 @@ export const useStore = create<AppState>()((set, get) => ({
     const { data: saleData, error: saleErr } = await supabase.from('sales').insert(insertData).select().single();
     if (saleErr) throw saleErr;
 
-    // Insert sale items
-    const itemRows = items.map((i) => ({
+    // Insert sale items with the FIFO-adjusted costs
+    const itemRows = adjustedItems.map((i) => ({
       sale_id: saleData.id,
       product_id: i.productId,
       product_name: i.productName,
@@ -275,6 +341,21 @@ export const useStore = create<AppState>()((set, get) => ({
       items: (itemsData || []).map(mapSaleItem),
       payments: paymentsData.map(mapPayment),
     };
+
+    // Refresh batches & products to reflect FIFO consumption
+    await get().fetchBatches();
+    const productIds = [...new Set(adjustedItems.map((i) => i.productId))];
+    if (productIds.length) {
+      const { data: prods } = await supabase.from('products').select('*').in('id', productIds);
+      if (prods) {
+        set((s) => ({
+          products: s.products.map((p) => {
+            const updated = prods.find((u: any) => u.id === p.id);
+            return updated ? mapProduct(updated) : p;
+          }),
+        }));
+      }
+    }
 
     set((s) => ({
       sales: [newSale, ...s.sales],
@@ -341,8 +422,6 @@ export const useStore = create<AppState>()((set, get) => ({
 
   getTodayStats: () => {
     const todayStr = getLocalDateString();
-    console.log(todayStr);
-    // Filtramos las ventas no anuladas que localmente ocurrieron hoy
     const todaySales = get().sales.filter(
       (s) => s.status !== 'anulado' && getLocalDateString(s.createdAt) === todayStr
     );

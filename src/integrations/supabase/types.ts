@@ -106,6 +106,47 @@ export type Database = {
           },
         ]
       }
+      product_batches: {
+        Row: {
+          created_at: string
+          id: string
+          note: string | null
+          product_id: string
+          quantity_received: number
+          quantity_remaining: number
+          received_at: string
+          unit_cost: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          product_id: string
+          quantity_received?: number
+          quantity_remaining?: number
+          received_at?: string
+          unit_cost?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          product_id?: string
+          quantity_received?: number
+          quantity_remaining?: number
+          received_at?: string
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_batches_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           active: boolean
@@ -278,7 +319,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      consume_stock_fifo: {
+        Args: { _product_id: string; _qty: number }
+        Returns: number
+      }
     }
     Enums: {
       payment_method: "efectivo" | "transferencia" | "pago_movil" | "credito"

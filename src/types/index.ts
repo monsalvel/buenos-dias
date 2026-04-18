@@ -10,6 +10,16 @@ export interface Product {
   createdAt: string;
 }
 
+export interface ProductBatch {
+  id: string;
+  productId: string;
+  unitCost: number;
+  quantityReceived: number;
+  quantityRemaining: number;
+  receivedAt: string;
+  note?: string;
+}
+
 export interface Customer {
   id: string;
   firstName: string;
