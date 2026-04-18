@@ -48,10 +48,15 @@ const Auth = () => {
     });
     setSubmitting(false);
     if (error) {
-      if (error.message.includes('already registered')) {
-        toast.error('Este correo ya está registrado');
+      const msg = error.message.toLowerCase();
+      if (msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
+        toast.error('Este correo ya está registrado. Inicia sesión.');
+      } else if (msg.includes('signups not allowed') || msg.includes('disabled')) {
+        toast.error('El registro de nuevas cuentas está deshabilitado');
+      } else if (msg.includes('password')) {
+        toast.error('Contraseña inválida: ' + error.message);
       } else {
-        toast.error('Error al crear cuenta');
+        toast.error(error.message || 'Error al crear cuenta');
       }
       return;
     }
