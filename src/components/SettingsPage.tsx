@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Store, Phone, Building, CreditCard } from 'lucide-react';
+import { Store, Phone, Building, CreditCard, LogOut } from 'lucide-react';
 
 const SettingsPage = () => {
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const { storeSettings, updateStoreSettings } = useStore();
   const [storeName, setStoreName] = useState(storeSettings?.storeName || '');
   const [phone, setPhone] = useState(storeSettings?.phone || '');
@@ -83,6 +87,29 @@ const SettingsPage = () => {
       <Button className="w-full" onClick={handleSave} disabled={saving}>
         {saving ? 'Guardando...' : 'Guardar configuración'}
       </Button>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Sesión</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {user && (
+            <p className="text-xs text-muted-foreground">
+              Conectado como <span className="font-medium text-foreground">{user.email}</span>
+            </p>
+          )}
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={async () => {
+              await signOut();
+              navigate('/auth', { replace: true });
+            }}
+          >
+            <LogOut className="w-4 h-4 mr-2" />Cerrar sesión
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 };
