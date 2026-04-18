@@ -6,9 +6,37 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Croissant } from 'lucide-react';
+
+const translateAuthError = (raw: string): string => {
+  const msg = (raw || '').toLowerCase();
+  if (msg.includes('invalid login credentials') || msg.includes('invalid_credentials')) {
+    return 'Credenciales incorrectas. Revisa tu correo y contraseña.';
+  }
+  if (msg.includes('email not confirmed')) return 'Correo no verificado. Revisa tu bandeja de entrada.';
+  if (msg.includes('user not found')) return 'No existe una cuenta con ese correo.';
+  if (msg.includes('rate limit') || msg.includes('too many')) {
+    return 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.';
+  }
+  if (msg.includes('network') || msg.includes('fetch')) return 'Error de conexión. Verifica tu internet.';
+  if (msg.includes('weak') || msg.includes('password is known')) {
+    return 'La contraseña es muy débil. Elige una más segura.';
+  }
+  if (msg.includes('password should be at least') || msg.includes('password length')) {
+    return 'La contraseña es demasiado corta.';
+  }
+  if (msg.includes('invalid email') || msg.includes('email address') && msg.includes('invalid')) {
+    return 'Correo electrónico inválido.';
+  }
+  if (msg.includes('signups not allowed') || msg.includes('signup is disabled')) {
+    return 'El registro de cuentas está deshabilitado. Contacta al administrador.';
+  }
+  if (msg.includes('already') || msg.includes('exists')) {
+    return 'Este correo ya está registrado.';
+  }
+  return 'Ocurrió un error. Inténtalo nuevamente.';
+};
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -27,40 +55,11 @@ const Auth = () => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setSubmitting(false);
     if (error) {
-      toast.error(error.message === 'Invalid login credentials' ? 'Credenciales incorrectas' : 'Error al iniciar sesión');
+      toast.error(translateAuthError(error.message));
       return;
     }
     toast.success('¡Bienvenido!');
     navigate('/', { replace: true });
-  };
-
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password.length < 6) {
-      toast.error('La contraseña debe tener al menos 6 caracteres');
-      return;
-    }
-    setSubmitting(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: `${window.location.origin}/` },
-    });
-    setSubmitting(false);
-    if (error) {
-      const msg = error.message.toLowerCase();
-      if (msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
-        toast.error('Este correo ya está registrado. Inicia sesión.');
-      } else if (msg.includes('signups not allowed') || msg.includes('disabled')) {
-        toast.error('El registro de nuevas cuentas está deshabilitado');
-      } else if (msg.includes('password')) {
-        toast.error('Contraseña inválida: ' + error.message);
-      } else {
-        toast.error(error.message || 'Error al crear cuenta');
-      }
-      return;
-    }
-    toast.success('Cuenta creada. ¡Ya puedes iniciar sesión!');
   };
 
   return (
@@ -76,48 +75,39 @@ const Auth = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-center text-base">Acceso</CardTitle>
+            <CardTitle className="text-center text-base">Iniciar sesión</CardTitle>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="signin">
-              <TabsList className="grid w-full grid-cols-2 mb-4">
-                <TabsTrigger value="signin">Iniciar sesión</TabsTrigger>
-                <TabsTrigger value="signup">Crear cuenta</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="signin">
-                <form onSubmit={handleSignIn} className="space-y-3">
-                  <div>
-                    <Label htmlFor="signin-email">Correo</Label>
-                    <Input id="signin-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label htmlFor="signin-password">Contraseña</Label>
-                    <Input id="signin-password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={submitting}>
-                    {submitting ? 'Entrando...' : 'Entrar'}
-                  </Button>
-                </form>
-              </TabsContent>
-
-              <TabsContent value="signup">
-                <form onSubmit={handleSignUp} className="space-y-3">
-                  <div>
-                    <Label htmlFor="signup-email">Correo</Label>
-                    <Input id="signup-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label htmlFor="signup-password">Contraseña</Label>
-                    <Input id="signup-password" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
-                    <p className="text-[10px] text-muted-foreground mt-1">Mínimo 6 caracteres</p>
-                  </div>
-                  <Button type="submit" className="w-full" disabled={submitting}>
-                    {submitting ? 'Creando...' : 'Crear cuenta'}
-                  </Button>
-                </form>
-              </TabsContent>
-            </Tabs>
+            <form onSubmit={handleSignIn} className="space-y-3">
+              <div>
+                <Label htmlFor="signin-email">Correo</Label>
+                <Input
+                  id="signin-email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="signin-password">Contraseña</Label>
+                <Input
+                  id="signin-password"
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={submitting}>
+                {submitting ? 'Entrando...' : 'Entrar'}
+              </Button>
+              <p className="text-[11px] text-muted-foreground text-center pt-2">
+                El acceso es solo para personal autorizado.
+              </p>
+            </form>
           </CardContent>
         </Card>
       </div>
