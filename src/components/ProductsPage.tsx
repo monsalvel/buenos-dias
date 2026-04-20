@@ -123,6 +123,9 @@ const ProductForm = ({ product, onSave, onClose, bcvRate }: { product?: Product;
       )}
 
       {margin && <p className="text-sm text-muted-foreground">Margen: <span className="font-bold text-success">{margin}%</span></p>}
+      <p className="text-[11px] text-muted-foreground bg-muted/40 rounded p-2 leading-snug">
+        ℹ️ Al guardar se creará una nueva versión en <strong>LISTA PRECIO VENTA USD</strong> y/o <strong>LISTA PRECIO COSTO USD</strong> si los precios cambiaron.
+      </p>
       <Button type="submit" className="w-full" disabled={submitting || (currency === 'BS' && !bcvRate)}>{submitting ? 'Guardando...' : (product ? 'Guardar cambios' : 'Agregar producto')}</Button>
     </form>
   );

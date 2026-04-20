@@ -106,6 +106,90 @@ export type Database = {
           },
         ]
       }
+      price_list_prices: {
+        Row: {
+          created_at: string
+          created_by_email: string | null
+          id: string
+          note: string | null
+          price_list_id: string
+          product_id: string
+          unit_price: number
+          valid_from: string
+          valid_to: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by_email?: string | null
+          id?: string
+          note?: string | null
+          price_list_id: string
+          product_id: string
+          unit_price: number
+          valid_from?: string
+          valid_to?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by_email?: string | null
+          id?: string
+          note?: string | null
+          price_list_id?: string
+          product_id?: string
+          unit_price?: number
+          valid_from?: string
+          valid_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_list_prices_price_list_id_fkey"
+            columns: ["price_list_id"]
+            isOneToOne: false
+            referencedRelation: "price_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "price_list_prices_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      price_lists: {
+        Row: {
+          code: string
+          created_at: string
+          currency: string
+          id: string
+          is_system: boolean
+          kind: Database["public"]["Enums"]["price_list_kind"]
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          currency?: string
+          id?: string
+          is_system?: boolean
+          kind: Database["public"]["Enums"]["price_list_kind"]
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          currency?: string
+          id?: string
+          is_system?: boolean
+          kind?: Database["public"]["Enums"]["price_list_kind"]
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       product_batches: {
         Row: {
           created_at: string
@@ -241,6 +325,7 @@ export type Database = {
           due_date: string | null
           id: string
           payment_method: Database["public"]["Enums"]["payment_method"]
+          price_list_id: string
           seller_name: string
           status: Database["public"]["Enums"]["sale_status"]
           total: number
@@ -256,6 +341,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           payment_method?: Database["public"]["Enums"]["payment_method"]
+          price_list_id: string
           seller_name?: string
           status?: Database["public"]["Enums"]["sale_status"]
           total?: number
@@ -271,6 +357,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           payment_method?: Database["public"]["Enums"]["payment_method"]
+          price_list_id?: string
           seller_name?: string
           status?: Database["public"]["Enums"]["sale_status"]
           total?: number
@@ -283,6 +370,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_price_list_id_fkey"
+            columns: ["price_list_id"]
+            isOneToOne: false
+            referencedRelation: "price_lists"
             referencedColumns: ["id"]
           },
         ]
@@ -323,9 +417,23 @@ export type Database = {
         Args: { _product_id: string; _qty: number }
         Returns: number
       }
+      get_active_price: {
+        Args: { _at?: string; _list_id: string; _product_id: string }
+        Returns: number
+      }
+      set_product_price: {
+        Args: {
+          _list_id: string
+          _new_price: number
+          _note?: string
+          _product_id: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       payment_method: "efectivo" | "transferencia" | "pago_movil" | "credito"
+      price_list_kind: "sale" | "cost"
       sale_status: "pagado" | "abonado" | "deuda" | "anulado"
     }
     CompositeTypes: {
@@ -455,6 +563,7 @@ export const Constants = {
   public: {
     Enums: {
       payment_method: ["efectivo", "transferencia", "pago_movil", "credito"],
+      price_list_kind: ["sale", "cost"],
       sale_status: ["pagado", "abonado", "deuda", "anulado"],
     },
   },

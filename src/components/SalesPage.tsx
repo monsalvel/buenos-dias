@@ -28,7 +28,12 @@ const statusColors: Record<SaleStatus, string> = {
 };
 
 const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
-  const { products, customers, addSale } = useStore();
+  const { products, customers, addSale, priceLists, getActivePrice } = useStore();
+
+  const saleLists = priceLists.filter((l) => l.kind === 'sale');
+  const defaultListId = saleLists.find((l) => l.code === 'LISTA_PRECIO_VENTA_USD')?.id || saleLists[0]?.id || '';
+
+  const [priceListId, setPriceListId] = useState(defaultListId);
   const [customerId, setCustomerId] = useState('');
   const [sellerName, setSellerName] = useState('');
   const [items, setItems] = useState<SaleItem[]>([]);
@@ -38,16 +43,30 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
   const [submitting, setSubmitting] = useState(false);
   const [openCustomerList, setOpenCustomerList] = useState(false);
 
-  const sortedCustomers = [...customers].sort((a, b) => 
+  const sortedCustomers = [...customers].sort((a, b) =>
     `${a.firstName} ${a.lastName || ''}`.trim().localeCompare(`${b.firstName} ${b.lastName || ''}`.trim())
   );
 
   const total = items.reduce((s, i) => s + i.subtotal, 0);
   const totalCost = items.reduce((s, i) => s + i.unitCost * i.quantity, 0);
 
+  const handleListChange = (newListId: string) => {
+    if (items.length > 0) {
+      const ok = window.confirm('Tienes productos en el carrito. Cambiar la lista los eliminará. ¿Continuar?');
+      if (!ok) return;
+      setItems([]);
+    }
+    setPriceListId(newListId);
+  };
+
   const addItem = (productId: string) => {
     const product = products.find((p) => p.id === productId);
     if (!product) return;
+    const listPrice = priceListId ? getActivePrice(priceListId, productId) : null;
+    if (listPrice == null) {
+      toast.error('Este producto no tiene precio en la lista seleccionada');
+      return;
+    }
     const existing = items.find((i) => i.productId === productId);
     if (existing) {
       setItems(items.map((i) =>
@@ -56,7 +75,7 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
           : i
       ));
     } else {
-      setItems([...items, { productId, productName: product.name, quantity: 1, unitPrice: product.price, unitCost: product.cost, subtotal: product.price }]);
+      setItems([...items, { productId, productName: product.name, quantity: 1, unitPrice: listPrice, unitCost: product.cost, subtotal: listPrice }]);
     }
   };
 
@@ -69,7 +88,7 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
   };
 
   const handleSubmit = async () => {
-    if (!customerId || items.length === 0 || !sellerName.trim()) return;
+    if (!customerId || items.length === 0 || !sellerName.trim() || !priceListId) return;
     const customer = customers.find((c) => c.id === customerId);
     if (!customer) return;
 
@@ -95,6 +114,7 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
         balance: Math.max(0, balance),
         status,
         paymentMethod,
+        priceListId,
       }, items, payments, dueDate || undefined);
       toast.success('Venta registrada exitosamente');
       onClose();
@@ -164,13 +184,37 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
       </div>
 
       <div>
+        <Label>Lista de precio *</Label>
+        <Select value={priceListId} onValueChange={handleListChange}>
+          <SelectTrigger><SelectValue placeholder="Selecciona una lista" /></SelectTrigger>
+          <SelectContent>
+            {saleLists.map((l) => (
+              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
         <Label>Agregar productos</Label>
         <div className="grid grid-cols-2 gap-2 mt-1">
-          {products.filter(p => p.active).map((p) => (
-            <Button key={p.id} variant="outline" size="sm" className="text-xs justify-start" onClick={() => addItem(p.id)}>
-              {p.category === 'pan' ? '🍞' : '🍩'} {p.name} - ${p.price.toFixed(2)}
-            </Button>
-          ))}
+          {products.filter(p => p.active).map((p) => {
+            const listPrice = priceListId ? getActivePrice(priceListId, p.id) : null;
+            const disabled = !priceListId || listPrice == null;
+            return (
+              <Button
+                key={p.id}
+                variant="outline"
+                size="sm"
+                className="text-xs justify-start"
+                onClick={() => addItem(p.id)}
+                disabled={disabled}
+                title={disabled ? 'Sin precio en la lista seleccionada' : undefined}
+              >
+                {p.category === 'pan' ? '🍞' : '🍩'} {p.name} {listPrice != null ? `- $${listPrice.toFixed(2)}` : '— Sin precio'}
+              </Button>
+            );
+          })}
         </div>
       </div>
 
@@ -221,7 +265,7 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
         </>
       )}
 
-      <Button className="w-full" onClick={handleSubmit} disabled={!customerId || items.length === 0 || !sellerName.trim() || submitting}>
+      <Button className="w-full" onClick={handleSubmit} disabled={!customerId || items.length === 0 || !sellerName.trim() || !priceListId || submitting}>
         {submitting ? 'Registrando...' : 'Registrar venta'}
       </Button>
     </div>

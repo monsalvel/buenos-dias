@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
-import { Product, Customer, Sale, Payment, SaleItem, SaleStatus, PaymentMethod, BcvRate, StoreSettings, ProductBatch } from '@/types';
+import { Product, Customer, Sale, Payment, SaleItem, SaleStatus, PaymentMethod, BcvRate, StoreSettings, ProductBatch, PriceList, PriceListPrice, PriceListKind } from '@/types';
 import { getLocalDateString } from '@/lib/utils';
 
 // Map DB rows to app types
@@ -30,11 +30,26 @@ const mapBatch = (r: any): ProductBatch => ({
   receivedAt: r.received_at, note: r.note ?? undefined,
 });
 
+const mapPriceList = (r: any): PriceList => ({
+  id: r.id, code: r.code, name: r.name, kind: r.kind as PriceListKind,
+  currency: r.currency, isSystem: !!r.is_system, createdAt: r.created_at,
+});
+
+const mapPriceListPrice = (r: any): PriceListPrice => ({
+  id: r.id, priceListId: r.price_list_id, productId: r.product_id,
+  unitPrice: Number(r.unit_price), validFrom: r.valid_from, validTo: r.valid_to,
+  note: r.note ?? undefined, createdByEmail: r.created_by_email ?? undefined,
+  createdAt: r.created_at,
+});
+
 interface AppState {
   products: Product[];
   customers: Customer[];
   sales: Sale[];
   batches: ProductBatch[];
+  priceLists: PriceList[];
+  /** Lookup: listId -> productId -> active unit price */
+  activePrices: Record<string, Record<string, number>>;
   bcvRate: BcvRate | null;
   storeSettings: StoreSettings | null;
   loading: boolean;
@@ -43,6 +58,9 @@ interface AppState {
   fetchAll: () => Promise<void>;
   fetchBcvRate: () => Promise<void>;
   fetchBatches: () => Promise<void>;
+  fetchPriceLists: () => Promise<void>;
+  fetchActivePrices: () => Promise<void>;
+  fetchPriceHistory: (listId: string, productId: string) => Promise<PriceListPrice[]>;
 
   // Product actions
   addProduct: (p: Omit<Product, 'id' | 'createdAt' | 'active'>) => Promise<void>;
@@ -63,6 +81,10 @@ interface AppState {
   addPayment: (saleId: string, payment: Omit<Payment, 'id'>) => Promise<void>;
   cancelSale: (saleId: string) => Promise<void>;
 
+  // Price list actions
+  setProductPrice: (listId: string, productId: string, newPrice: number, note?: string) => Promise<void>;
+  getActivePrice: (listId: string, productId: string) => number | null;
+
   // Store settings
   updateStoreSettings: (s: Partial<StoreSettings>) => Promise<void>;
 
@@ -76,17 +98,21 @@ export const useStore = create<AppState>()((set, get) => ({
   customers: [],
   sales: [],
   batches: [],
+  priceLists: [],
+  activePrices: {},
   bcvRate: null,
   storeSettings: null,
   loading: true,
 
   fetchAll: async () => {
     set({ loading: true });
-    const [prodRes, custRes, salesRes, batchesRes] = await Promise.all([
+    const [prodRes, custRes, salesRes, batchesRes, listsRes, pricesRes] = await Promise.all([
       supabase.from('products').select('*').order('created_at'),
       supabase.from('customers').select('*').order('created_at'),
       supabase.from('sales').select('*').order('created_at', { ascending: false }),
       supabase.from('product_batches').select('*').order('received_at', { ascending: false }),
+      supabase.from('price_lists').select('*').order('created_at'),
+      supabase.from('price_list_prices').select('*').is('valid_to', null),
     ]);
 
     const products = (prodRes.data || []).map(mapProduct);
@@ -118,12 +144,23 @@ export const useStore = create<AppState>()((set, get) => ({
       balance: Number(s.balance),
       status: s.status as SaleStatus,
       paymentMethod: s.payment_method as PaymentMethod,
+      priceListId: s.price_list_id,
       createdAt: s.created_at,
       updatedAt: s.updated_at,
       dueDate: s.due_date || undefined,
       items: allItems.filter((i: any) => i.sale_id === s.id).map(mapSaleItem),
       payments: allPayments.filter((p: any) => p.sale_id === s.id).map(mapPayment),
     }));
+
+    // Build active prices lookup
+    const priceLists = (listsRes.data || []).map(mapPriceList);
+    const activePrices: Record<string, Record<string, number>> = {};
+    for (const row of (pricesRes.data || []) as any[]) {
+      const lid = row.price_list_id;
+      const pid = row.product_id;
+      if (!activePrices[lid]) activePrices[lid] = {};
+      activePrices[lid][pid] = Number(row.unit_price);
+    }
 
     // Fetch latest BCV rate
     const { data: rateData } = await supabase
@@ -150,7 +187,35 @@ export const useStore = create<AppState>()((set, get) => ({
       phone: settingsData.phone, bank: settingsData.bank, cedula: settingsData.cedula,
     } : null;
 
-    set({ products, customers, sales, batches, bcvRate, storeSettings, loading: false });
+    set({ products, customers, sales, batches, priceLists, activePrices, bcvRate, storeSettings, loading: false });
+  },
+
+  fetchPriceLists: async () => {
+    const { data } = await supabase.from('price_lists').select('*').order('created_at');
+    set({ priceLists: (data || []).map(mapPriceList) });
+  },
+
+  fetchActivePrices: async () => {
+    const { data } = await supabase.from('price_list_prices').select('*').is('valid_to', null);
+    const activePrices: Record<string, Record<string, number>> = {};
+    for (const row of (data || []) as any[]) {
+      const lid = row.price_list_id;
+      const pid = row.product_id;
+      if (!activePrices[lid]) activePrices[lid] = {};
+      activePrices[lid][pid] = Number(row.unit_price);
+    }
+    set({ activePrices });
+  },
+
+  fetchPriceHistory: async (listId, productId) => {
+    const { data, error } = await supabase
+      .from('price_list_prices')
+      .select('*')
+      .eq('price_list_id', listId)
+      .eq('product_id', productId)
+      .order('valid_from', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(mapPriceListPrice);
   },
 
   fetchBatches: async () => {
@@ -193,9 +258,25 @@ export const useStore = create<AppState>()((set, get) => ({
     if (p.description !== undefined) update.description = p.description;
     if (p.stock !== undefined) update.stock = p.stock;
 
+    const prev = get().products.find((pr) => pr.id === id);
     const { error } = await supabase.from('products').update(update).eq('id', id);
     if (error) throw error;
     set((s) => ({ products: s.products.map((pr) => pr.id === id ? { ...pr, ...p } : pr) }));
+
+    // Sync price lists when price/cost changed via product form
+    const lists = get().priceLists;
+    const saleList = lists.find((l) => l.code === 'LISTA_PRECIO_VENTA_USD');
+    const costList = lists.find((l) => l.code === 'LISTA_PRECIO_COSTO_USD');
+    const tasks: Promise<void>[] = [];
+    if (saleList && p.price !== undefined && prev && prev.price !== p.price) {
+      tasks.push(get().setProductPrice(saleList.id, id, p.price, 'Actualización desde ficha de producto'));
+    }
+    if (costList && p.cost !== undefined && prev && prev.cost !== p.cost) {
+      tasks.push(get().setProductPrice(costList.id, id, p.cost, 'Actualización desde ficha de producto'));
+    }
+    if (tasks.length) {
+      try { await Promise.all(tasks); } catch (e) { console.error('Error sincronizando listas de precios:', e); }
+    }
   },
 
   deleteProduct: async (id) => {
@@ -288,6 +369,7 @@ export const useStore = create<AppState>()((set, get) => ({
       balance: sale.balance,
       status: sale.status,
       payment_method: sale.paymentMethod,
+      price_list_id: sale.priceListId,
       due_date: dueDate || null,
     };
     const { data: saleData, error: saleErr } = await supabase.from('sales').insert(insertData).select().single();
@@ -335,6 +417,7 @@ export const useStore = create<AppState>()((set, get) => ({
       balance: Number(saleData.balance),
       status: saleData.status as SaleStatus,
       paymentMethod: saleData.payment_method as PaymentMethod,
+      priceListId: (saleData as any).price_list_id,
       createdAt: saleData.created_at,
       updatedAt: saleData.updated_at,
       dueDate: (saleData as any).due_date || undefined,
@@ -400,6 +483,27 @@ export const useStore = create<AppState>()((set, get) => ({
         sl.id === saleId ? { ...sl, status: 'anulado' as SaleStatus, updatedAt: new Date().toISOString() } : sl
       ),
     }));
+  },
+
+  setProductPrice: async (listId, productId, newPrice, note) => {
+    const { error } = await supabase.rpc('set_product_price', {
+      _list_id: listId,
+      _product_id: productId,
+      _new_price: newPrice,
+      _note: note ?? null,
+    });
+    if (error) throw error;
+    set((s) => {
+      const next = { ...s.activePrices };
+      if (!next[listId]) next[listId] = {};
+      next[listId] = { ...next[listId], [productId]: newPrice };
+      return { activePrices: next };
+    });
+  },
+
+  getActivePrice: (listId, productId) => {
+    const v = get().activePrices[listId]?.[productId];
+    return typeof v === 'number' ? v : null;
   },
 
   updateStoreSettings: async (s) => {

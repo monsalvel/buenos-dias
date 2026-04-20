@@ -68,6 +68,7 @@ export interface Sale {
   balance: number;
   status: SaleStatus;
   paymentMethod: PaymentMethod;
+  priceListId: string;
   createdAt: string;
   updatedAt: string;
   dueDate?: string;
@@ -88,4 +89,28 @@ export interface StoreSettings {
   cedula: string;
 }
 
-export type TabId = 'dashboard' | 'sales' | 'customers' | 'products' | 'stock' | 'settings';
+export type PriceListKind = 'sale' | 'cost';
+
+export interface PriceList {
+  id: string;
+  code: string;
+  name: string;
+  kind: PriceListKind;
+  currency: string;
+  isSystem: boolean;
+  createdAt: string;
+}
+
+export interface PriceListPrice {
+  id: string;
+  priceListId: string;
+  productId: string;
+  unitPrice: number;
+  validFrom: string;
+  validTo: string | null;
+  note?: string;
+  createdByEmail?: string;
+  createdAt: string;
+}
+
+export type TabId = 'dashboard' | 'sales' | 'customers' | 'products' | 'stock' | 'settings' | 'price-lists';
