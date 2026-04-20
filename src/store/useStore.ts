@@ -258,9 +258,25 @@ export const useStore = create<AppState>()((set, get) => ({
     if (p.description !== undefined) update.description = p.description;
     if (p.stock !== undefined) update.stock = p.stock;
 
+    const prev = get().products.find((pr) => pr.id === id);
     const { error } = await supabase.from('products').update(update).eq('id', id);
     if (error) throw error;
     set((s) => ({ products: s.products.map((pr) => pr.id === id ? { ...pr, ...p } : pr) }));
+
+    // Sync price lists when price/cost changed via product form
+    const lists = get().priceLists;
+    const saleList = lists.find((l) => l.code === 'LISTA_PRECIO_VENTA_USD');
+    const costList = lists.find((l) => l.code === 'LISTA_PRECIO_COSTO_USD');
+    const tasks: Promise<void>[] = [];
+    if (saleList && p.price !== undefined && prev && prev.price !== p.price) {
+      tasks.push(get().setProductPrice(saleList.id, id, p.price, 'Actualización desde ficha de producto'));
+    }
+    if (costList && p.cost !== undefined && prev && prev.cost !== p.cost) {
+      tasks.push(get().setProductPrice(costList.id, id, p.cost, 'Actualización desde ficha de producto'));
+    }
+    if (tasks.length) {
+      try { await Promise.all(tasks); } catch (e) { console.error('Error sincronizando listas de precios:', e); }
+    }
   },
 
   deleteProduct: async (id) => {
