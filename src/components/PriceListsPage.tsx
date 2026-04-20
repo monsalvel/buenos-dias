@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useStore } from '@/store/useStore';
+import { supabase } from '@/integrations/supabase/client';
 import { PriceList, PriceListPrice, Product } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,7 +32,6 @@ const EditPriceDialog = ({
   onClose: () => void;
 }) => {
   const setProductPrice = useStore((s) => s.setProductPrice);
-  const updateProduct = useStore((s) => s.updateProduct);
   const [currency, setCurrency] = useState<Currency>('USD');
   const [value, setValue] = useState(currentPrice != null ? String(currentPrice) : '');
   const [note, setNote] = useState('');
@@ -47,12 +47,19 @@ const EditPriceDialog = ({
     }
     setSubmitting(true);
     try {
-      await setProductPrice(list.id, product.id, Number(finalPrice.toFixed(4)), note.trim() || undefined);
-      // Keep product.cost / product.price in sync with the system list
+      const rounded = Number(finalPrice.toFixed(4));
+      await setProductPrice(list.id, product.id, rounded, note.trim() || undefined);
+      // Sync products table directly (skip updateProduct to avoid re-triggering setProductPrice)
       if (list.code === 'LISTA_PRECIO_VENTA_USD') {
-        await updateProduct(product.id, { price: Number(finalPrice.toFixed(4)) });
+        await supabase.from('products').update({ price: rounded }).eq('id', product.id);
+        useStore.setState((s) => ({
+          products: s.products.map((p) => p.id === product.id ? { ...p, price: rounded } : p),
+        }));
       } else if (list.code === 'LISTA_PRECIO_COSTO_USD') {
-        await updateProduct(product.id, { cost: Number(finalPrice.toFixed(4)) });
+        await supabase.from('products').update({ cost: rounded }).eq('id', product.id);
+        useStore.setState((s) => ({
+          products: s.products.map((p) => p.id === product.id ? { ...p, cost: rounded } : p),
+        }));
       }
       toast.success('Nueva versión de precio creada');
       onClose();

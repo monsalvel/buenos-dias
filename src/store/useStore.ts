@@ -106,13 +106,11 @@ export const useStore = create<AppState>()((set, get) => ({
 
   fetchAll: async () => {
     set({ loading: true });
-    const [prodRes, custRes, salesRes, batchesRes, listsRes, pricesRes] = await Promise.all([
+    const [prodRes, custRes, salesRes, batchesRes] = await Promise.all([
       supabase.from('products').select('*').order('created_at'),
       supabase.from('customers').select('*').order('created_at'),
       supabase.from('sales').select('*').order('created_at', { ascending: false }),
       supabase.from('product_batches').select('*').order('received_at', { ascending: false }),
-      supabase.from('price_lists').select('*').order('created_at'),
-      supabase.from('price_list_prices').select('*').is('valid_to', null),
     ]);
 
     const products = (prodRes.data || []).map(mapProduct);
@@ -152,15 +150,7 @@ export const useStore = create<AppState>()((set, get) => ({
       payments: allPayments.filter((p: any) => p.sale_id === s.id).map(mapPayment),
     }));
 
-    // Build active prices lookup
-    const priceLists = (listsRes.data || []).map(mapPriceList);
-    const activePrices: Record<string, Record<string, number>> = {};
-    for (const row of (pricesRes.data || []) as any[]) {
-      const lid = row.price_list_id;
-      const pid = row.product_id;
-      if (!activePrices[lid]) activePrices[lid] = {};
-      activePrices[lid][pid] = Number(row.unit_price);
-    }
+
 
     // Fetch latest BCV rate
     const { data: rateData } = await supabase
@@ -187,7 +177,11 @@ export const useStore = create<AppState>()((set, get) => ({
       phone: settingsData.phone, bank: settingsData.bank, cedula: settingsData.cedula,
     } : null;
 
-    set({ products, customers, sales, batches, priceLists, activePrices, bcvRate, storeSettings, loading: false });
+    set({ products, customers, sales, batches, bcvRate, storeSettings, loading: false });
+
+    // Lazy-load price lists & active prices in background (non-blocking)
+    get().fetchPriceLists();
+    get().fetchActivePrices();
   },
 
   fetchPriceLists: async () => {
@@ -246,6 +240,17 @@ export const useStore = create<AppState>()((set, get) => ({
     }).select().single();
     if (error) throw error;
     set((s) => ({ products: [...s.products, mapProduct(data)] }));
+
+    // Create initial prices in system lists
+    const lists = get().priceLists;
+    const saleList = lists.find((l) => l.code === 'LISTA_PRECIO_VENTA_USD');
+    const costList = lists.find((l) => l.code === 'LISTA_PRECIO_COSTO_USD');
+    const syncTasks: Promise<void>[] = [];
+    if (saleList) syncTasks.push(get().setProductPrice(saleList.id, data.id, p.price, 'Precio inicial'));
+    if (costList) syncTasks.push(get().setProductPrice(costList.id, data.id, p.cost, 'Costo inicial'));
+    if (syncTasks.length) {
+      try { await Promise.all(syncTasks); } catch (e) { console.error('Error creando precios iniciales:', e); }
+    }
   },
 
   updateProduct: async (id, p) => {
