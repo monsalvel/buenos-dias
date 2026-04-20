@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
-import { Product, Customer, Sale, Payment, SaleItem, SaleStatus, PaymentMethod, BcvRate, StoreSettings, ProductBatch } from '@/types';
+import { Product, Customer, Sale, Payment, SaleItem, SaleStatus, PaymentMethod, BcvRate, StoreSettings, ProductBatch, PriceList, PriceListPrice, PriceListKind } from '@/types';
 import { getLocalDateString } from '@/lib/utils';
 
 // Map DB rows to app types
