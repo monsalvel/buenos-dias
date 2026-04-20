@@ -47,6 +47,9 @@ interface AppState {
   customers: Customer[];
   sales: Sale[];
   batches: ProductBatch[];
+  priceLists: PriceList[];
+  /** Lookup: listId -> productId -> active unit price */
+  activePrices: Record<string, Record<string, number>>;
   bcvRate: BcvRate | null;
   storeSettings: StoreSettings | null;
   loading: boolean;
@@ -55,6 +58,9 @@ interface AppState {
   fetchAll: () => Promise<void>;
   fetchBcvRate: () => Promise<void>;
   fetchBatches: () => Promise<void>;
+  fetchPriceLists: () => Promise<void>;
+  fetchActivePrices: () => Promise<void>;
+  fetchPriceHistory: (listId: string, productId: string) => Promise<PriceListPrice[]>;
 
   // Product actions
   addProduct: (p: Omit<Product, 'id' | 'createdAt' | 'active'>) => Promise<void>;
@@ -74,6 +80,10 @@ interface AppState {
   addSale: (sale: Omit<Sale, 'id' | 'createdAt' | 'updatedAt' | 'items' | 'payments'>, items: SaleItem[], payments: Omit<Payment, 'id'>[], dueDate?: string) => Promise<void>;
   addPayment: (saleId: string, payment: Omit<Payment, 'id'>) => Promise<void>;
   cancelSale: (saleId: string) => Promise<void>;
+
+  // Price list actions
+  setProductPrice: (listId: string, productId: string, newPrice: number, note?: string) => Promise<void>;
+  getActivePrice: (listId: string, productId: string) => number | null;
 
   // Store settings
   updateStoreSettings: (s: Partial<StoreSettings>) => Promise<void>;
