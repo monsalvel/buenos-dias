@@ -68,6 +68,7 @@ export interface Sale {
   balance: number;
   status: SaleStatus;
   paymentMethod: PaymentMethod;
+  priceListId: string;
   createdAt: string;
   updatedAt: string;
   dueDate?: string;
