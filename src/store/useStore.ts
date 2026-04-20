@@ -353,6 +353,7 @@ export const useStore = create<AppState>()((set, get) => ({
       balance: sale.balance,
       status: sale.status,
       payment_method: sale.paymentMethod,
+      price_list_id: sale.priceListId,
       due_date: dueDate || null,
     };
     const { data: saleData, error: saleErr } = await supabase.from('sales').insert(insertData).select().single();
@@ -400,6 +401,7 @@ export const useStore = create<AppState>()((set, get) => ({
       balance: Number(saleData.balance),
       status: saleData.status as SaleStatus,
       paymentMethod: saleData.payment_method as PaymentMethod,
+      priceListId: (saleData as any).price_list_id,
       createdAt: saleData.created_at,
       updatedAt: saleData.updated_at,
       dueDate: (saleData as any).due_date || undefined,
@@ -465,6 +467,27 @@ export const useStore = create<AppState>()((set, get) => ({
         sl.id === saleId ? { ...sl, status: 'anulado' as SaleStatus, updatedAt: new Date().toISOString() } : sl
       ),
     }));
+  },
+
+  setProductPrice: async (listId, productId, newPrice, note) => {
+    const { error } = await supabase.rpc('set_product_price', {
+      _list_id: listId,
+      _product_id: productId,
+      _new_price: newPrice,
+      _note: note ?? null,
+    });
+    if (error) throw error;
+    set((s) => {
+      const next = { ...s.activePrices };
+      if (!next[listId]) next[listId] = {};
+      next[listId] = { ...next[listId], [productId]: newPrice };
+      return { activePrices: next };
+    });
+  },
+
+  getActivePrice: (listId, productId) => {
+    const v = get().activePrices[listId]?.[productId];
+    return typeof v === 'number' ? v : null;
   },
 
   updateStoreSettings: async (s) => {
