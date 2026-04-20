@@ -98,17 +98,21 @@ export const useStore = create<AppState>()((set, get) => ({
   customers: [],
   sales: [],
   batches: [],
+  priceLists: [],
+  activePrices: {},
   bcvRate: null,
   storeSettings: null,
   loading: true,
 
   fetchAll: async () => {
     set({ loading: true });
-    const [prodRes, custRes, salesRes, batchesRes] = await Promise.all([
+    const [prodRes, custRes, salesRes, batchesRes, listsRes, pricesRes] = await Promise.all([
       supabase.from('products').select('*').order('created_at'),
       supabase.from('customers').select('*').order('created_at'),
       supabase.from('sales').select('*').order('created_at', { ascending: false }),
       supabase.from('product_batches').select('*').order('received_at', { ascending: false }),
+      supabase.from('price_lists').select('*').order('created_at'),
+      supabase.from('price_list_prices').select('*').is('valid_to', null),
     ]);
 
     const products = (prodRes.data || []).map(mapProduct);
@@ -140,12 +144,23 @@ export const useStore = create<AppState>()((set, get) => ({
       balance: Number(s.balance),
       status: s.status as SaleStatus,
       paymentMethod: s.payment_method as PaymentMethod,
+      priceListId: s.price_list_id,
       createdAt: s.created_at,
       updatedAt: s.updated_at,
       dueDate: s.due_date || undefined,
       items: allItems.filter((i: any) => i.sale_id === s.id).map(mapSaleItem),
       payments: allPayments.filter((p: any) => p.sale_id === s.id).map(mapPayment),
     }));
+
+    // Build active prices lookup
+    const priceLists = (listsRes.data || []).map(mapPriceList);
+    const activePrices: Record<string, Record<string, number>> = {};
+    for (const row of (pricesRes.data || []) as any[]) {
+      const lid = row.price_list_id;
+      const pid = row.product_id;
+      if (!activePrices[lid]) activePrices[lid] = {};
+      activePrices[lid][pid] = Number(row.unit_price);
+    }
 
     // Fetch latest BCV rate
     const { data: rateData } = await supabase
@@ -172,7 +187,35 @@ export const useStore = create<AppState>()((set, get) => ({
       phone: settingsData.phone, bank: settingsData.bank, cedula: settingsData.cedula,
     } : null;
 
-    set({ products, customers, sales, batches, bcvRate, storeSettings, loading: false });
+    set({ products, customers, sales, batches, priceLists, activePrices, bcvRate, storeSettings, loading: false });
+  },
+
+  fetchPriceLists: async () => {
+    const { data } = await supabase.from('price_lists').select('*').order('created_at');
+    set({ priceLists: (data || []).map(mapPriceList) });
+  },
+
+  fetchActivePrices: async () => {
+    const { data } = await supabase.from('price_list_prices').select('*').is('valid_to', null);
+    const activePrices: Record<string, Record<string, number>> = {};
+    for (const row of (data || []) as any[]) {
+      const lid = row.price_list_id;
+      const pid = row.product_id;
+      if (!activePrices[lid]) activePrices[lid] = {};
+      activePrices[lid][pid] = Number(row.unit_price);
+    }
+    set({ activePrices });
+  },
+
+  fetchPriceHistory: async (listId, productId) => {
+    const { data, error } = await supabase
+      .from('price_list_prices')
+      .select('*')
+      .eq('price_list_id', listId)
+      .eq('product_id', productId)
+      .order('valid_from', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(mapPriceListPrice);
   },
 
   fetchBatches: async () => {
