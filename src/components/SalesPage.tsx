@@ -184,13 +184,37 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
       </div>
 
       <div>
+        <Label>Lista de precio *</Label>
+        <Select value={priceListId} onValueChange={handleListChange}>
+          <SelectTrigger><SelectValue placeholder="Selecciona una lista" /></SelectTrigger>
+          <SelectContent>
+            {saleLists.map((l) => (
+              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
         <Label>Agregar productos</Label>
         <div className="grid grid-cols-2 gap-2 mt-1">
-          {products.filter(p => p.active).map((p) => (
-            <Button key={p.id} variant="outline" size="sm" className="text-xs justify-start" onClick={() => addItem(p.id)}>
-              {p.category === 'pan' ? '🍞' : '🍩'} {p.name} - ${p.price.toFixed(2)}
-            </Button>
-          ))}
+          {products.filter(p => p.active).map((p) => {
+            const listPrice = priceListId ? getActivePrice(priceListId, p.id) : null;
+            const disabled = !priceListId || listPrice == null;
+            return (
+              <Button
+                key={p.id}
+                variant="outline"
+                size="sm"
+                className="text-xs justify-start"
+                onClick={() => addItem(p.id)}
+                disabled={disabled}
+                title={disabled ? 'Sin precio en la lista seleccionada' : undefined}
+              >
+                {p.category === 'pan' ? '🍞' : '🍩'} {p.name} {listPrice != null ? `- $${listPrice.toFixed(2)}` : '— Sin precio'}
+              </Button>
+            );
+          })}
         </div>
       </div>
 
@@ -241,7 +265,7 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
         </>
       )}
 
-      <Button className="w-full" onClick={handleSubmit} disabled={!customerId || items.length === 0 || !sellerName.trim() || submitting}>
+      <Button className="w-full" onClick={handleSubmit} disabled={!customerId || items.length === 0 || !sellerName.trim() || !priceListId || submitting}>
         {submitting ? 'Registrando...' : 'Registrar venta'}
       </Button>
     </div>
