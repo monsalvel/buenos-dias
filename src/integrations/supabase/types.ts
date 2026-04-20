@@ -325,6 +325,7 @@ export type Database = {
           due_date: string | null
           id: string
           payment_method: Database["public"]["Enums"]["payment_method"]
+          price_list_id: string
           seller_name: string
           status: Database["public"]["Enums"]["sale_status"]
           total: number
@@ -340,6 +341,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           payment_method?: Database["public"]["Enums"]["payment_method"]
+          price_list_id: string
           seller_name?: string
           status?: Database["public"]["Enums"]["sale_status"]
           total?: number
@@ -355,6 +357,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           payment_method?: Database["public"]["Enums"]["payment_method"]
+          price_list_id?: string
           seller_name?: string
           status?: Database["public"]["Enums"]["sale_status"]
           total?: number
@@ -367,6 +370,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_price_list_id_fkey"
+            columns: ["price_list_id"]
+            isOneToOne: false
+            referencedRelation: "price_lists"
             referencedColumns: ["id"]
           },
         ]
