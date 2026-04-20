@@ -30,6 +30,18 @@ const mapBatch = (r: any): ProductBatch => ({
   receivedAt: r.received_at, note: r.note ?? undefined,
 });
 
+const mapPriceList = (r: any): PriceList => ({
+  id: r.id, code: r.code, name: r.name, kind: r.kind as PriceListKind,
+  currency: r.currency, isSystem: !!r.is_system, createdAt: r.created_at,
+});
+
+const mapPriceListPrice = (r: any): PriceListPrice => ({
+  id: r.id, priceListId: r.price_list_id, productId: r.product_id,
+  unitPrice: Number(r.unit_price), validFrom: r.valid_from, validTo: r.valid_to,
+  note: r.note ?? undefined, createdByEmail: r.created_by_email ?? undefined,
+  createdAt: r.created_at,
+});
+
 interface AppState {
   products: Product[];
   customers: Customer[];
