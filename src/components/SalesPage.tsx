@@ -30,8 +30,14 @@ const statusColors: Record<SaleStatus, string> = {
 const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
   const { products, customers, addSale, priceLists, getActivePrice } = useStore();
 
+  // Allow both sale and cost price lists for order creation
   const saleLists = priceLists.filter((l) => l.kind === 'sale');
-  const defaultListId = saleLists.find((l) => l.code === 'LISTA_PRECIO_VENTA_USD')?.id || saleLists[0]?.id || '';
+  const costLists = priceLists.filter((l) => l.kind === 'cost');
+  const defaultListId =
+    saleLists.find((l) => l.code === 'LISTA_PRECIO_VENTA_USD')?.id ||
+    saleLists[0]?.id ||
+    costLists[0]?.id ||
+    '';
 
   const [priceListId, setPriceListId] = useState(defaultListId);
   const [customerId, setCustomerId] = useState('');
@@ -49,6 +55,9 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
 
   const total = items.reduce((s, i) => s + i.subtotal, 0);
   const totalCost = items.reduce((s, i) => s + i.unitCost * i.quantity, 0);
+
+  const selectedList = priceLists.find((l) => l.id === priceListId);
+  const isCostList = selectedList?.kind === 'cost';
 
   const handleListChange = (newListId: string) => {
     if (items.length > 0) {
@@ -75,7 +84,10 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
           : i
       ));
     } else {
-      setItems([...items, { productId, productName: product.name, quantity: 1, unitPrice: listPrice, unitCost: product.cost, subtotal: listPrice }]);
+      setItems([
+        ...items,
+        { productId, productName: product.name, quantity: 1, unitPrice: listPrice, unitCost: product.cost, subtotal: listPrice },
+      ]);
     }
   };
 
@@ -126,148 +138,217 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
     }
   };
 
+  const canSubmit = !!customerId && items.length > 0 && !!sellerName.trim() && !!priceListId && !submitting;
+
   return (
-    <div className="space-y-4 max-h-[70vh] overflow-y-auto">
-      <div>
-        <Label>Vendedor</Label>
-        <Input value={sellerName} onChange={(e) => setSellerName(e.target.value)} placeholder="Nombre del vendedor" required />
-      </div>
+    <div className="flex flex-col h-full min-h-0">
+      {/* Scrollable form content */}
+      <div className="flex-1 overflow-y-auto px-1 -mx-1 space-y-4 pb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="seller-name">Vendedor</Label>
+            <Input
+              id="seller-name"
+              value={sellerName}
+              onChange={(e) => setSellerName(e.target.value)}
+              placeholder="Nombre del vendedor"
+              required
+              className="h-11"
+            />
+          </div>
 
-      <div className="flex flex-col gap-1">
-        <Label>Cliente</Label>
-        <Popover open={openCustomerList} onOpenChange={setOpenCustomerList}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              role="combobox"
-              aria-expanded={openCustomerList}
-              className="w-full justify-between"
-            >
-              {customerId
-                ? (() => {
-                    const c = customers.find((c) => c.id === customerId);
-                    return c ? `${c.firstName} ${c.lastName || ''}` : "Seleccionar cliente";
-                  })()
-                : "Seleccionar cliente..."}
-              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-full p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Buscar cliente..." />
-              <CommandList>
-                <CommandEmpty>No se encontró ningún cliente.</CommandEmpty>
-                <CommandGroup>
-                  {sortedCustomers.map((c) => (
-                    <CommandItem
-                      key={c.id}
-                      value={`${c.firstName} ${c.lastName || ''}`}
-                      onSelect={() => {
-                        setCustomerId(c.id);
-                        setOpenCustomerList(false);
-                      }}
-                    >
-                      <Check
-                        className={cn(
-                          "mr-2 h-4 w-4",
-                          customerId === c.id ? "opacity-100" : "opacity-0"
-                        )}
-                      />
-                      {c.firstName} {c.lastName}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-      </div>
-
-      <div>
-        <Label>Lista de precio *</Label>
-        <Select value={priceListId} onValueChange={handleListChange}>
-          <SelectTrigger><SelectValue placeholder="Selecciona una lista" /></SelectTrigger>
-          <SelectContent>
-            {saleLists.map((l) => (
-              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
-        <Label>Agregar productos</Label>
-        <div className="grid grid-cols-2 gap-2 mt-1">
-          {products.filter(p => p.active).map((p) => {
-            const listPrice = priceListId ? getActivePrice(priceListId, p.id) : null;
-            const disabled = !priceListId || listPrice == null;
-            return (
-              <Button
-                key={p.id}
-                variant="outline"
-                size="sm"
-                className="text-xs justify-start"
-                onClick={() => addItem(p.id)}
-                disabled={disabled}
-                title={disabled ? 'Sin precio en la lista seleccionada' : undefined}
-              >
-                {p.category === 'pan' ? '🍞' : '🍩'} {p.name} {listPrice != null ? `- $${listPrice.toFixed(2)}` : '— Sin precio'}
-              </Button>
-            );
-          })}
+          <div className="space-y-1.5">
+            <Label>Cliente</Label>
+            <Popover open={openCustomerList} onOpenChange={setOpenCustomerList}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openCustomerList}
+                  className="w-full justify-between h-11 font-normal"
+                >
+                  <span className="truncate">
+                    {customerId
+                      ? (() => {
+                          const c = customers.find((c) => c.id === customerId);
+                          return c ? `${c.firstName} ${c.lastName || ''}`.trim() : 'Seleccionar cliente';
+                        })()
+                      : 'Seleccionar cliente'}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar cliente..." />
+                  <CommandList>
+                    <CommandEmpty>No se encontró ningún cliente.</CommandEmpty>
+                    <CommandGroup>
+                      {sortedCustomers.map((c) => (
+                        <CommandItem
+                          key={c.id}
+                          value={`${c.firstName} ${c.lastName || ''}`}
+                          onSelect={() => {
+                            setCustomerId(c.id);
+                            setOpenCustomerList(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              'mr-2 h-4 w-4',
+                              customerId === c.id ? 'opacity-100' : 'opacity-0'
+                            )}
+                          />
+                          {c.firstName} {c.lastName}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
-      </div>
 
-      {items.length > 0 && (
-        <Card>
-          <CardContent className="p-3 space-y-2">
-            {items.map((item) => (
-              <div key={item.productId} className="flex items-center justify-between">
-                <span className="text-sm font-medium">{item.productName}</span>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQty(item.productId, -1)}><Minus className="w-3 h-3" /></Button>
-                  <span className="text-sm font-bold w-6 text-center">{item.quantity}</span>
-                  <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQty(item.productId, 1)}><Plus className="w-3 h-3" /></Button>
-                  <span className="text-sm font-semibold w-16 text-right">${item.subtotal.toFixed(2)}</span>
+        <div className="space-y-1.5">
+          <Label>Lista de precio *</Label>
+          <Select value={priceListId} onValueChange={handleListChange}>
+            <SelectTrigger className="h-11"><SelectValue placeholder="Selecciona una lista" /></SelectTrigger>
+            <SelectContent>
+              {saleLists.length > 0 && (
+                <SelectGroup>
+                  <SelectLabel>Venta</SelectLabel>
+                  {saleLists.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                  ))}
+                </SelectGroup>
+              )}
+              {costLists.length > 0 && (
+                <SelectGroup>
+                  <SelectLabel>Costo</SelectLabel>
+                  {costLists.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                  ))}
+                </SelectGroup>
+              )}
+            </SelectContent>
+          </Select>
+          {isCostList && (
+            <p className="text-[11px] text-warning leading-snug">
+              ⚠️ Estás usando una lista de costo. Los precios aplicados serán de costo, no de venta.
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label>Agregar productos</Label>
+            <span className="text-[11px] text-muted-foreground">{items.length} en carrito</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {products.filter((p) => p.active).map((p) => {
+              const listPrice = priceListId ? getActivePrice(priceListId, p.id) : null;
+              const disabled = !priceListId || listPrice == null;
+              return (
+                <Button
+                  key={p.id}
+                  variant="outline"
+                  className="h-auto min-h-11 py-2 px-3 justify-between gap-2 text-left"
+                  onClick={() => addItem(p.id)}
+                  disabled={disabled}
+                  title={disabled ? 'Sin precio en la lista seleccionada' : undefined}
+                >
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-base shrink-0">{p.category === 'pan' ? '🍞' : '🍩'}</span>
+                    <span className="text-xs font-medium truncate">{p.name}</span>
+                  </span>
+                  <span
+                    className={cn(
+                      'text-xs font-semibold shrink-0 tabular-nums',
+                      listPrice == null ? 'text-muted-foreground' : 'text-primary'
+                    )}
+                  >
+                    {listPrice != null ? `$${listPrice.toFixed(2)}` : 'Sin precio'}
+                  </span>
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+
+        {items.length > 0 && (
+          <Card>
+            <CardContent className="p-3 space-y-2">
+              {items.map((item) => (
+                <div key={item.productId} className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium truncate flex-1 min-w-0">{item.productName}</span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQty(item.productId, -1)}>
+                      <Minus className="w-3.5 h-3.5" />
+                    </Button>
+                    <span className="text-sm font-bold w-7 text-center tabular-nums">{item.quantity}</span>
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQty(item.productId, 1)}>
+                      <Plus className="w-3.5 h-3.5" />
+                    </Button>
+                    <span className="text-sm font-semibold w-16 text-right tabular-nums">${item.subtotal.toFixed(2)}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
-            <div className="border-t pt-2 flex justify-between font-bold">
-              <span>Total</span><span>${total.toFixed(2)}</span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
-      <div>
-        <Label>Método de pago</Label>
-        <Select value={paymentMethod} onValueChange={(v: PaymentMethod) => setPaymentMethod(v)}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {Object.entries(paymentLabels).map(([k, v]) => (
-              <SelectItem key={k} value={k}>{v}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="space-y-1.5">
+          <Label>Método de pago</Label>
+          <Select value={paymentMethod} onValueChange={(v: PaymentMethod) => setPaymentMethod(v)}>
+            <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Object.entries(paymentLabels).map(([k, v]) => (
+                <SelectItem key={k} value={k}>{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {paymentMethod === 'credito' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Monto de abono inicial ($)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                inputMode="decimal"
+                value={paidAmount}
+                onChange={(e) => setPaidAmount(e.target.value)}
+                placeholder="0.00"
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5"><CalendarClock className="w-3.5 h-3.5" />Fecha límite</Label>
+              <Input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                min={getLocalDateString()}
+                className="h-11"
+              />
+              <p className="text-[10px] text-muted-foreground">Se te recordará cuando llegue esta fecha</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      {paymentMethod === 'credito' && (
-        <>
-          <div>
-            <Label>Monto de abono inicial ($)</Label>
-            <Input type="number" step="0.01" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} placeholder="0.00" />
-          </div>
-          <div>
-            <Label className="flex items-center gap-1.5"><CalendarClock className="w-3.5 h-3.5" />Fecha límite de pago</Label>
-            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} min={getLocalDateString()} />
-            <p className="text-[10px] text-muted-foreground mt-1">Se te recordará cuando llegue esta fecha</p>
-          </div>
-        </>
-      )}
-
-      <Button className="w-full" onClick={handleSubmit} disabled={!customerId || items.length === 0 || !sellerName.trim() || !priceListId || submitting}>
-        {submitting ? 'Registrando...' : 'Registrar venta'}
-      </Button>
+      {/* Sticky footer with total + submit */}
+      <div className="border-t pt-3 mt-2 space-y-3 bg-background">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">Total</span>
+          <span className="text-2xl font-bold tabular-nums">${total.toFixed(2)}</span>
+        </div>
+        <Button className="w-full h-12 text-base" onClick={handleSubmit} disabled={!canSubmit}>
+          {submitting ? 'Registrando...' : 'Registrar venta'}
+        </Button>
+      </div>
     </div>
   );
 };
