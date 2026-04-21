@@ -446,9 +446,13 @@ const SalesPage = () => {
       </div>
 
       <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Nueva venta</DialogTitle></DialogHeader>
-          <NewSaleForm onClose={() => setShowNew(false)} />
+        <DialogContent className="max-w-md p-0 gap-0 sm:rounded-lg max-h-[100dvh] sm:max-h-[90vh] h-[100dvh] sm:h-auto flex flex-col">
+          <DialogHeader className="px-5 pt-5 pb-3 border-b shrink-0">
+            <DialogTitle>Nueva venta</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 px-5 pb-5 pt-3 flex flex-col">
+            <NewSaleForm onClose={() => setShowNew(false)} />
+          </div>
         </DialogContent>
       </Dialog>
 
