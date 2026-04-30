@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
-import { Product, Customer, Sale, Payment, SaleItem, SaleStatus, PaymentMethod, BcvRate, StoreSettings, ProductBatch, PriceList, PriceListPrice, PriceListKind } from '@/types';
+import { Product, Customer, Sale, Payment, SaleItem, SaleStatus, PaymentMethod, BcvRate, StoreSettings, ProductBatch, PriceList, PriceListPrice, PriceListKind, BatchPayment } from '@/types';
 import { getLocalDateString } from '@/lib/utils';
 
 // Map DB rows to app types
@@ -42,11 +42,18 @@ const mapPriceListPrice = (r: any): PriceListPrice => ({
   createdAt: r.created_at,
 });
 
+const mapBatchPayment = (r: any): BatchPayment => ({
+  id: r.id, batchId: r.batch_id, amount: Number(r.amount),
+  method: r.method, paidAt: r.paid_at, note: r.note ?? undefined,
+  createdByEmail: r.created_by_email ?? undefined, createdAt: r.created_at,
+});
+
 interface AppState {
   products: Product[];
   customers: Customer[];
   sales: Sale[];
   batches: ProductBatch[];
+  batchPayments: BatchPayment[];
   priceLists: PriceList[];
   /** Lookup: listId -> productId -> active unit price */
   activePrices: Record<string, Record<string, number>>;
@@ -61,6 +68,11 @@ interface AppState {
   fetchPriceLists: () => Promise<void>;
   fetchActivePrices: () => Promise<void>;
   fetchPriceHistory: (listId: string, productId: string) => Promise<PriceListPrice[]>;
+  fetchBatchPayments: () => Promise<void>;
+
+  // Batch payment actions
+  addBatchPayment: (batchId: string, payment: Omit<BatchPayment, 'id' | 'batchId' | 'createdAt' | 'createdByEmail'>) => Promise<void>;
+  deleteBatchPayment: (id: string) => Promise<void>;
 
   // Product actions
   addProduct: (p: Omit<Product, 'id' | 'createdAt' | 'active'>) => Promise<void>;
@@ -98,6 +110,7 @@ export const useStore = create<AppState>()((set, get) => ({
   customers: [],
   sales: [],
   batches: [],
+  batchPayments: [],
   priceLists: [],
   activePrices: {},
   bcvRate: null,
