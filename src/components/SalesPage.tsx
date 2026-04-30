@@ -264,7 +264,15 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {products.filter((p) => p.active).map((p) => {
               const listPrice = priceListId ? getActivePrice(priceListId, p.id) : null;
-              const disabled = !priceListId || listPrice == null;
+              const stock = p.stock ?? 0;
+              const noStock = stock <= 0;
+              const noPrice = !priceListId || listPrice == null;
+              const disabled = noStock || noPrice;
+              const reason = noStock
+                ? 'Sin stock disponible'
+                : noPrice
+                  ? 'Sin precio en la lista seleccionada'
+                  : undefined;
               return (
                 <Button
                   key={p.id}
@@ -272,11 +280,19 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
                   className="h-auto min-h-11 py-2 px-3 justify-between gap-2 text-left"
                   onClick={() => addItem(p.id)}
                   disabled={disabled}
-                  title={disabled ? 'Sin precio en la lista seleccionada' : undefined}
+                  title={reason}
                 >
                   <span className="flex items-center gap-1.5 min-w-0">
                     <span className="text-base shrink-0">{p.category === 'pan' ? '🍞' : '🍩'}</span>
-                    <span className="text-xs font-medium truncate">{p.name}</span>
+                    <span className="flex flex-col min-w-0">
+                      <span className="text-xs font-medium truncate">{p.name}</span>
+                      <span className={cn(
+                        'text-[10px] tabular-nums',
+                        noStock ? 'text-destructive font-semibold' : 'text-muted-foreground'
+                      )}>
+                        {noStock ? 'Sin stock' : `Stock: ${stock}`}
+                      </span>
+                    </span>
                   </span>
                   <span
                     className={cn(
