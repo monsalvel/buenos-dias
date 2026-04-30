@@ -71,6 +71,11 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
   const addItem = (productId: string) => {
     const product = products.find((p) => p.id === productId);
     if (!product) return;
+    const stock = product.stock ?? 0;
+    if (stock <= 0) {
+      toast.error('Sin stock disponible para este producto');
+      return;
+    }
     const listPrice = priceListId ? getActivePrice(priceListId, productId) : null;
     if (listPrice == null) {
       toast.error('Este producto no tiene precio en la lista seleccionada');
@@ -78,6 +83,10 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
     }
     const existing = items.find((i) => i.productId === productId);
     if (existing) {
+      if (existing.quantity + 1 > stock) {
+        toast.error(`Solo hay ${stock} unidades disponibles`);
+        return;
+      }
       setItems(items.map((i) =>
         i.productId === productId
           ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.unitPrice }
@@ -94,7 +103,14 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
   const updateQty = (productId: string, delta: number) => {
     setItems(items.map((i) => {
       if (i.productId !== productId) return i;
-      const newQty = Math.max(0, i.quantity + delta);
+      const product = products.find((p) => p.id === productId);
+      const stock = product?.stock ?? 0;
+      const requested = i.quantity + delta;
+      if (delta > 0 && requested > stock) {
+        toast.error(`Solo hay ${stock} unidades disponibles`);
+        return i;
+      }
+      const newQty = Math.max(0, requested);
       return { ...i, quantity: newQty, subtotal: newQty * i.unitPrice };
     }).filter((i) => i.quantity > 0));
   };
