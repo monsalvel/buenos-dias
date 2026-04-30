@@ -192,9 +192,34 @@ export const useStore = create<AppState>()((set, get) => ({
 
     set({ products, customers, sales, batches, bcvRate, storeSettings, loading: false });
 
-    // Lazy-load price lists & active prices in background (non-blocking)
+    // Lazy-load price lists, active prices and supplier payments in background
     get().fetchPriceLists();
     get().fetchActivePrices();
+    get().fetchBatchPayments();
+  },
+
+  fetchBatchPayments: async () => {
+    const { data, error } = await (supabase as any).from('batch_payments').select('*').order('paid_at', { ascending: false });
+    if (error) { console.error('Error fetching batch_payments:', error); return; }
+    set({ batchPayments: (data || []).map(mapBatchPayment) });
+  },
+
+  addBatchPayment: async (batchId, payment) => {
+    const { data, error } = await (supabase as any).from('batch_payments').insert({
+      batch_id: batchId,
+      amount: payment.amount,
+      method: payment.method,
+      paid_at: payment.paidAt,
+      note: payment.note ?? null,
+    }).select().single();
+    if (error) throw error;
+    set((s) => ({ batchPayments: [mapBatchPayment(data), ...s.batchPayments] }));
+  },
+
+  deleteBatchPayment: async (id) => {
+    const { error } = await (supabase as any).from('batch_payments').delete().eq('id', id);
+    if (error) throw error;
+    set((s) => ({ batchPayments: s.batchPayments.filter((p) => p.id !== id) }));
   },
 
   fetchPriceLists: async () => {
