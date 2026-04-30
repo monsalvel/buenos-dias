@@ -390,6 +390,20 @@ export const useStore = create<AppState>()((set, get) => ({
   },
 
   addSale: async (sale, items, payments, dueDate) => {
+    // Validar stock antes de consumir: bloquear si algún producto tiene stock 0
+    // o si la cantidad pedida supera el stock disponible.
+    const productsState = get().products;
+    for (const it of items) {
+      const prod = productsState.find((p) => p.id === it.productId);
+      const stock = prod?.stock ?? 0;
+      if (stock <= 0) {
+        throw new Error(`Sin stock: "${prod?.name || 'producto'}" tiene 0 unidades disponibles`);
+      }
+      if (it.quantity > stock) {
+        throw new Error(`Stock insuficiente para "${prod?.name}": pediste ${it.quantity}, hay ${stock}`);
+      }
+    }
+
     // Consume FIFO for each item to get the real unit cost from batches
     const adjustedItems = await Promise.all(items.map(async (i) => {
       const { data: realCost } = await supabase.rpc('consume_stock_fifo', {
