@@ -113,4 +113,15 @@ export interface PriceListPrice {
   createdAt: string;
 }
 
-export type TabId = 'dashboard' | 'sales' | 'customers' | 'products' | 'stock' | 'settings' | 'price-lists';
+export interface BatchPayment {
+  id: string;
+  batchId: string;
+  amount: number;
+  method: string;
+  paidAt: string;
+  note?: string;
+  createdByEmail?: string;
+  createdAt: string;
+}
+
+export type TabId = 'dashboard' | 'sales' | 'customers' | 'products' | 'stock' | 'settings' | 'price-lists' | 'supplier-payments';

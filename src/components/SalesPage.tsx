@@ -71,6 +71,11 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
   const addItem = (productId: string) => {
     const product = products.find((p) => p.id === productId);
     if (!product) return;
+    const stock = product.stock ?? 0;
+    if (stock <= 0) {
+      toast.error('Sin stock disponible para este producto');
+      return;
+    }
     const listPrice = priceListId ? getActivePrice(priceListId, productId) : null;
     if (listPrice == null) {
       toast.error('Este producto no tiene precio en la lista seleccionada');
@@ -78,6 +83,10 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
     }
     const existing = items.find((i) => i.productId === productId);
     if (existing) {
+      if (existing.quantity + 1 > stock) {
+        toast.error(`Solo hay ${stock} unidades disponibles`);
+        return;
+      }
       setItems(items.map((i) =>
         i.productId === productId
           ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.unitPrice }
@@ -94,7 +103,14 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
   const updateQty = (productId: string, delta: number) => {
     setItems(items.map((i) => {
       if (i.productId !== productId) return i;
-      const newQty = Math.max(0, i.quantity + delta);
+      const product = products.find((p) => p.id === productId);
+      const stock = product?.stock ?? 0;
+      const requested = i.quantity + delta;
+      if (delta > 0 && requested > stock) {
+        toast.error(`Solo hay ${stock} unidades disponibles`);
+        return i;
+      }
+      const newQty = Math.max(0, requested);
       return { ...i, quantity: newQty, subtotal: newQty * i.unitPrice };
     }).filter((i) => i.quantity > 0));
   };
@@ -248,7 +264,15 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {products.filter((p) => p.active).map((p) => {
               const listPrice = priceListId ? getActivePrice(priceListId, p.id) : null;
-              const disabled = !priceListId || listPrice == null;
+              const stock = p.stock ?? 0;
+              const noStock = stock <= 0;
+              const noPrice = !priceListId || listPrice == null;
+              const disabled = noStock || noPrice;
+              const reason = noStock
+                ? 'Sin stock disponible'
+                : noPrice
+                  ? 'Sin precio en la lista seleccionada'
+                  : undefined;
               return (
                 <Button
                   key={p.id}
@@ -256,11 +280,19 @@ const NewSaleForm = ({ onClose }: { onClose: () => void }) => {
                   className="h-auto min-h-11 py-2 px-3 justify-between gap-2 text-left"
                   onClick={() => addItem(p.id)}
                   disabled={disabled}
-                  title={disabled ? 'Sin precio en la lista seleccionada' : undefined}
+                  title={reason}
                 >
                   <span className="flex items-center gap-1.5 min-w-0">
                     <span className="text-base shrink-0">{p.category === 'pan' ? '🍞' : '🍩'}</span>
-                    <span className="text-xs font-medium truncate">{p.name}</span>
+                    <span className="flex flex-col min-w-0">
+                      <span className="text-xs font-medium truncate">{p.name}</span>
+                      <span className={cn(
+                        'text-[10px] tabular-nums',
+                        noStock ? 'text-destructive font-semibold' : 'text-muted-foreground'
+                      )}>
+                        {noStock ? 'Sin stock' : `Stock: ${stock}`}
+                      </span>
+                    </span>
                   </span>
                   <span
                     className={cn(

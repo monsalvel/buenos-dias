@@ -9,6 +9,7 @@ import ProductsPage from '@/components/ProductsPage';
 import StockPage from '@/components/StockPage';
 import SettingsPage from '@/components/SettingsPage';
 import PriceListsPage from '@/components/PriceListsPage';
+import SupplierPaymentsPage from '@/components/SupplierPaymentsPage';
 import NotificationBell from '@/components/NotificationBell';
 
 const pages: Record<TabId, React.ComponentType> = {
@@ -19,6 +20,7 @@ const pages: Record<TabId, React.ComponentType> = {
   stock: StockPage,
   settings: SettingsPage,
   'price-lists': PriceListsPage,
+  'supplier-payments': SupplierPaymentsPage,
 };
 
 const Index = () => {

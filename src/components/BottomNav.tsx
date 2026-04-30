@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutDashboard, ShoppingCart, Users, Package, Settings, Warehouse, MoreHorizontal, ChevronRight, ListOrdered } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Users, Package, Settings, Warehouse, MoreHorizontal, ChevronRight, ListOrdered, Truck } from 'lucide-react';
 import { TabId } from '@/types';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -24,6 +24,7 @@ const secondary: {
   { id: 'stock', label: 'Stock', description: 'Inventario y lotes', icon: Warehouse },
   { id: 'products', label: 'Productos', description: 'Catálogo y precios', icon: Package },
   { id: 'price-lists', label: 'Listas de Precios', description: 'Versiones e historial de precios', icon: ListOrdered },
+  { id: 'supplier-payments', label: 'Pagos a Proveedor', description: 'Deuda y pagos por lote', icon: Truck },
   { id: 'settings', label: 'Ajustes', description: 'Datos del negocio y cuenta', icon: Settings },
 ];
 

@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      batch_payments: {
+        Row: {
+          amount: number
+          batch_id: string
+          created_at: string
+          created_by_email: string | null
+          id: string
+          method: string
+          note: string | null
+          paid_at: string
+        }
+        Insert: {
+          amount: number
+          batch_id: string
+          created_at?: string
+          created_by_email?: string | null
+          id?: string
+          method?: string
+          note?: string | null
+          paid_at?: string
+        }
+        Update: {
+          amount?: number
+          batch_id?: string
+          created_at?: string
+          created_by_email?: string | null
+          id?: string
+          method?: string
+          note?: string | null
+          paid_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "batch_payments_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "product_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bcv_rates: {
         Row: {
           currency: string

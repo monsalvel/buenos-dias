@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
-import { Product, Customer, Sale, Payment, SaleItem, SaleStatus, PaymentMethod, BcvRate, StoreSettings, ProductBatch, PriceList, PriceListPrice, PriceListKind } from '@/types';
+import { Product, Customer, Sale, Payment, SaleItem, SaleStatus, PaymentMethod, BcvRate, StoreSettings, ProductBatch, PriceList, PriceListPrice, PriceListKind, BatchPayment } from '@/types';
 import { getLocalDateString } from '@/lib/utils';
 
 // Map DB rows to app types
@@ -42,11 +42,18 @@ const mapPriceListPrice = (r: any): PriceListPrice => ({
   createdAt: r.created_at,
 });
 
+const mapBatchPayment = (r: any): BatchPayment => ({
+  id: r.id, batchId: r.batch_id, amount: Number(r.amount),
+  method: r.method, paidAt: r.paid_at, note: r.note ?? undefined,
+  createdByEmail: r.created_by_email ?? undefined, createdAt: r.created_at,
+});
+
 interface AppState {
   products: Product[];
   customers: Customer[];
   sales: Sale[];
   batches: ProductBatch[];
+  batchPayments: BatchPayment[];
   priceLists: PriceList[];
   /** Lookup: listId -> productId -> active unit price */
   activePrices: Record<string, Record<string, number>>;
@@ -61,6 +68,11 @@ interface AppState {
   fetchPriceLists: () => Promise<void>;
   fetchActivePrices: () => Promise<void>;
   fetchPriceHistory: (listId: string, productId: string) => Promise<PriceListPrice[]>;
+  fetchBatchPayments: () => Promise<void>;
+
+  // Batch payment actions
+  addBatchPayment: (batchId: string, payment: Omit<BatchPayment, 'id' | 'batchId' | 'createdAt' | 'createdByEmail'>) => Promise<void>;
+  deleteBatchPayment: (id: string) => Promise<void>;
 
   // Product actions
   addProduct: (p: Omit<Product, 'id' | 'createdAt' | 'active'>) => Promise<void>;
@@ -98,6 +110,7 @@ export const useStore = create<AppState>()((set, get) => ({
   customers: [],
   sales: [],
   batches: [],
+  batchPayments: [],
   priceLists: [],
   activePrices: {},
   bcvRate: null,
@@ -179,9 +192,34 @@ export const useStore = create<AppState>()((set, get) => ({
 
     set({ products, customers, sales, batches, bcvRate, storeSettings, loading: false });
 
-    // Lazy-load price lists & active prices in background (non-blocking)
+    // Lazy-load price lists, active prices and supplier payments in background
     get().fetchPriceLists();
     get().fetchActivePrices();
+    get().fetchBatchPayments();
+  },
+
+  fetchBatchPayments: async () => {
+    const { data, error } = await (supabase as any).from('batch_payments').select('*').order('paid_at', { ascending: false });
+    if (error) { console.error('Error fetching batch_payments:', error); return; }
+    set({ batchPayments: (data || []).map(mapBatchPayment) });
+  },
+
+  addBatchPayment: async (batchId, payment) => {
+    const { data, error } = await (supabase as any).from('batch_payments').insert({
+      batch_id: batchId,
+      amount: payment.amount,
+      method: payment.method,
+      paid_at: payment.paidAt,
+      note: payment.note ?? null,
+    }).select().single();
+    if (error) throw error;
+    set((s) => ({ batchPayments: [mapBatchPayment(data), ...s.batchPayments] }));
+  },
+
+  deleteBatchPayment: async (id) => {
+    const { error } = await (supabase as any).from('batch_payments').delete().eq('id', id);
+    if (error) throw error;
+    set((s) => ({ batchPayments: s.batchPayments.filter((p) => p.id !== id) }));
   },
 
   fetchPriceLists: async () => {
@@ -352,6 +390,20 @@ export const useStore = create<AppState>()((set, get) => ({
   },
 
   addSale: async (sale, items, payments, dueDate) => {
+    // Validar stock antes de consumir: bloquear si algún producto tiene stock 0
+    // o si la cantidad pedida supera el stock disponible.
+    const productsState = get().products;
+    for (const it of items) {
+      const prod = productsState.find((p) => p.id === it.productId);
+      const stock = prod?.stock ?? 0;
+      if (stock <= 0) {
+        throw new Error(`Sin stock: "${prod?.name || 'producto'}" tiene 0 unidades disponibles`);
+      }
+      if (it.quantity > stock) {
+        throw new Error(`Stock insuficiente para "${prod?.name}": pediste ${it.quantity}, hay ${stock}`);
+      }
+    }
+
     // Consume FIFO for each item to get the real unit cost from batches
     const adjustedItems = await Promise.all(items.map(async (i) => {
       const { data: realCost } = await supabase.rpc('consume_stock_fifo', {
